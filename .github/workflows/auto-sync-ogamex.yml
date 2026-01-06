@@ -1,0 +1,270 @@
+name: Auto-Sync OGameX Battle Engine
+
+on:
+  schedule:
+    # Run daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch: # Allow manual trigger
+    inputs:
+      force_sync:
+        description: 'Force sync even if no changes detected'
+        required: false
+        default: 'false'
+
+jobs:
+  auto-sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Checkout OGameX
+        uses: actions/checkout@v4
+        with:
+          repository: lanedirt/OGameX
+          path: ogamex-upstream
+          fetch-depth: 0
+
+      - name: Check for updates
+        id: check
+        run: |
+          LATEST_COMMIT=$(cd ogamex-upstream && git rev-parse HEAD)
+          LATEST_SHORT=$(cd ogamex-upstream && git rev-parse --short HEAD)
+          LAST_SYNCED=$(cat .ogamex-last-sync 2>/dev/null || echo "none")
+          LAST_SYNCED_SHORT=$(echo $LAST_SYNCED | cut -c1-7)
+
+          echo "latest=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "latest_short=$LATEST_SHORT" >> $GITHUB_OUTPUT
+          echo "last_synced=$LAST_SYNCED" >> $GITHUB_OUTPUT
+          echo "last_synced_short=$LAST_SYNCED_SHORT" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_COMMIT" != "$LAST_SYNCED" ] || [ "${{ github.event.inputs.force_sync }}" = "true" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✓ Updates detected or force sync requested"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "✓ No updates"
+          fi
+
+      - name: Analyze changes
+        if: steps.check.outputs.changed == 'true'
+        id: analyze
+        run: |
+          cd ogamex-upstream
+
+          # Get list of changed files
+          CHANGED_FILES=$(git diff --name-only ${{ steps.check.outputs.last_synced }}..HEAD 2>/dev/null || echo "")
+
+          # Check critical files - Rust battle engine is primary
+          RUST_ENGINE_CHANGED=$(echo "$CHANGED_FILES" | grep -E "rust/battle_engine|rust/.*ffi" || echo "")
+          FLEET_CHANGED=$(echo "$CHANGED_FILES" | grep -E "FleetMissionService|CoordinateDistanceCalculator" || echo "")
+          SPEED_CHANGED=$(echo "$CHANGED_FILES" | grep -E "SpeedPropertyService" || echo "")
+          UNITS_CHANGED=$(echo "$CHANGED_FILES" | grep -E "UnitObject|Models/Units/" || echo "")
+
+          # Determine if automatic sync is safe
+          AUTO_SAFE="true"
+          if [ ! -z "$RUST_ENGINE_CHANGED" ]; then
+            AUTO_SAFE="false"
+            echo "battle_engine_changed=true" >> $GITHUB_OUTPUT
+          fi
+          if [ ! -z "$FLEET_CHANGED" ]; then
+            AUTO_SAFE="false"
+            echo "fleet_calc_changed=true" >> $GITHUB_OUTPUT
+          fi
+
+          echo "auto_safe=$AUTO_SAFE" >> $GITHUB_OUTPUT
+          echo "speed_changed=$SPEED_CHANGED" >> $GITHUB_OUTPUT
+          echo "units_changed=$UNITS_CHANGED" >> $GITHUB_OUTPUT
+
+          # Get commit messages
+          git log --pretty=format:"- %h - %s" ${{ steps.check.outputs.last_synced }}..HEAD > ../commits.txt
+
+      - name: Copy updated files (non-critical only)
+        if: steps.check.outputs.changed == 'true' && steps.analyze.outputs.auto_safe == 'true'
+        run: |
+          echo "Copying non-critical updated files from OGameX..."
+
+          # Example: Copy unit stats if they changed
+          # cp ogamex-upstream/app/GameObjects/Models/Units/*.php .sync-temp/ || true
+
+          echo "Note: Only safe, non-breaking changes would be auto-applied here"
+          echo "Critical changes (battle engine, fleet calc) require manual review"
+
+      - name: Create Pull Request for safe changes
+        if: steps.check.outputs.changed == 'true' && steps.analyze.outputs.auto_safe == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: |
+            🤖 Auto-sync with OGameX ${{ steps.check.outputs.latest_short }}
+
+            Synced non-critical changes from OGameX upstream.
+
+            - Last synced: ${{ steps.check.outputs.last_synced_short }}
+            - New commit: ${{ steps.check.outputs.latest_short }}
+
+            Changes detected in:
+            - Speed calculations: ${{ steps.analyze.outputs.speed_changed != '' }}
+            - Unit definitions: ${{ steps.analyze.outputs.units_changed != '' }}
+
+            This is an automated sync of safe, non-breaking changes.
+          branch: auto-sync-ogamex-${{ steps.check.outputs.latest_short }}
+          delete-branch: true
+          title: '🤖 Auto-sync OGameX ${{ steps.check.outputs.latest_short }} (Safe Changes)'
+          body: |
+            ## Automated OGameX Sync
+
+            This PR contains **safe, non-breaking changes** from OGameX upstream.
+
+            ### 📊 Changes
+
+            - **Speed calculations**: ${{ steps.analyze.outputs.speed_changed != '' && '⚠️ Changed' || '✓ No changes' }}
+            - **Unit definitions**: ${{ steps.analyze.outputs.units_changed != '' && '⚠️ Changed' || '✓ No changes' }}
+
+            ### ✅ Safety Check
+
+            - ✅ Battle engine: No changes
+            - ✅ Fleet calculations: No changes
+
+            ### 📝 Commits
+
+            ```
+            $(cat commits.txt)
+            ```
+
+            ### 🔗 Review
+
+            [View changes on GitHub](https://github.com/lanedirt/OGameX/compare/${{ steps.check.outputs.last_synced_short }}...${{ steps.check.outputs.latest_short }})
+
+            ### ⚡ Next Steps
+
+            1. Review the changes
+            2. Test locally if needed
+            3. Merge this PR to apply the updates
+
+            ---
+
+            *This PR was automatically created by the Auto-Sync workflow.*
+          labels: |
+            auto-sync
+            ogamex-update
+            safe-changes
+
+      - name: Create issue for critical changes
+        if: steps.check.outputs.changed == 'true' && steps.analyze.outputs.auto_safe == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commits = fs.readFileSync('commits.txt', 'utf8');
+
+            let criticalChanges = [];
+            if ('${{ steps.analyze.outputs.battle_engine_changed }}' === 'true') {
+              criticalChanges.push('- 🔴 **Battle Engine** - Requires manual update to `src/lib.rs`');
+            }
+            if ('${{ steps.analyze.outputs.fleet_calc_changed }}' === 'true') {
+              criticalChanges.push('- 🔴 **Fleet Calculations** - Requires manual update to `browser-extension/app.js`');
+            }
+
+            const body = `## 🔴 CRITICAL - Manual Sync Required
+
+            OGameX has updates that affect **critical battle engine code** and require manual review and updates.
+
+            ### ⚠️ Critical Changes Detected
+
+            ${criticalChanges.join('\n')}
+
+            ### 📝 Recent Commits
+
+            \`\`\`
+            ${commits}
+            \`\`\`
+
+            ### 🔗 Review Changes
+
+            [View full diff on GitHub](https://github.com/lanedirt/OGameX/compare/${{ steps.check.outputs.last_synced_short }}...${{ steps.check.outputs.latest_short }})
+
+            ### 📋 Manual Update Required
+
+            **1. Review OGameX Changes:**
+            \`\`\`bash
+            cd ~/workspace/OGameX
+            git fetch origin main
+            git diff ${{ steps.check.outputs.last_synced_short }}...${{ steps.check.outputs.latest_short }} app/GameObjects/Services/BattleEngine.php
+            \`\`\`
+
+            **2. Update Your Code:**
+            - Battle Engine: Update \`src/lib.rs\`
+            - Fleet Calc: Update \`browser-extension/app.js\`
+
+            **3. Test:**
+            \`\`\`bash
+            ./build.sh
+            # Load in browser and test
+            \`\`\`
+
+            **4. Mark as Synced:**
+            \`\`\`bash
+            echo "${{ steps.check.outputs.latest }}" > .ogamex-last-sync
+            git add .ogamex-last-sync
+            git commit -m "Sync with OGameX ${{ steps.check.outputs.latest_short }}"
+            \`\`\`
+
+            ### 🚫 Automatic Sync Blocked
+
+            This update was **not** automatically applied because it contains breaking changes to critical battle mechanics.
+
+            ---
+
+            *This issue was automatically created by the Auto-Sync workflow.*`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔴 CRITICAL - OGameX Update Requires Manual Sync',
+              body: body,
+              labels: ['critical', 'ogamex-sync', 'manual-review-required']
+            });
+
+      - name: Send Notification (Optional)
+        if: steps.check.outputs.changed == 'true'
+        run: |
+          # Add notification integrations here:
+          # - Slack webhook
+          # - Discord webhook
+          # - Email via SendGrid
+          # - Telegram bot
+
+          echo "Notifications would be sent here"
+          echo "Safe changes: ${{ steps.analyze.outputs.auto_safe }}"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## OGameX Auto-Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check.outputs.changed }}" = "true" ]; then
+            echo "✅ **Updates detected**" >> $GITHUB_STEP_SUMMARY
+            echo "- Last synced: \`${{ steps.check.outputs.last_synced_short }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "- Latest commit: \`${{ steps.check.outputs.latest_short }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+
+            if [ "${{ steps.analyze.outputs.auto_safe }}" = "true" ]; then
+              echo "🤖 **Auto-sync**: Pull request created with safe changes" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "⚠️ **Manual review**: Issue created for critical changes" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "✅ **No updates** - Already in sync with OGameX" >> $GITHUB_STEP_SUMMARY
+          fi

@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OGame Combat Simulator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚔️ OGameX Combat Simulator</h1>
+        </header>
+
+        <div class="main-content">
+            <div class="simulator-grid">
+                <!-- Attacker Panel -->
+                <div class="side-panel attacker-panel">
+                    <h2 class="panel-title">🚀 Attackers</h2>
+
+                    <!-- Technologies -->
+                    <div class="tech-section">
+                        <h3>Technologies</h3>
+                        <div class="tech-inputs">
+                            <label>
+                                <span>Weapons</span>
+                                <input type="number" id="atkWeapons" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Shielding</span>
+                                <input type="number" id="atkShielding" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Armour</span>
+                                <input type="number" id="atkArmour" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Combustion</span>
+                                <input type="number" id="atkCombustion" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Impulse</span>
+                                <input type="number" id="atkImpulse" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Hyperspace</span>
+                                <input type="number" id="atkHyperspace" min="0" max="50" value="0">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Ships -->
+                    <div class="units-section">
+                        <h3>Ships</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Small Cargo</span>
+                                <input type="number" class="unit-input" id="atk-202" min="0" value="0" data-unit-id="202">
+                                <span class="unit-remaining" id="atk-202-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Large Cargo</span>
+                                <input type="number" class="unit-input" id="atk-203" min="0" value="0" data-unit-id="203">
+                                <span class="unit-remaining" id="atk-203-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Light Fighter</span>
+                                <input type="number" class="unit-input" id="atk-204" min="0" value="0" data-unit-id="204">
+                                <span class="unit-remaining" id="atk-204-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Heavy Fighter</span>
+                                <input type="number" class="unit-input" id="atk-205" min="0" value="0" data-unit-id="205">
+                                <span class="unit-remaining" id="atk-205-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Cruiser</span>
+                                <input type="number" class="unit-input" id="atk-206" min="0" value="0" data-unit-id="206">
+                                <span class="unit-remaining" id="atk-206-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Battleship</span>
+                                <input type="number" class="unit-input" id="atk-207" min="0" value="0" data-unit-id="207">
+                                <span class="unit-remaining" id="atk-207-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Colony Ship</span>
+                                <input type="number" class="unit-input" id="atk-208" min="0" value="0" data-unit-id="208">
+                                <span class="unit-remaining" id="atk-208-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Recycler</span>
+                                <input type="number" class="unit-input" id="atk-209" min="0" value="0" data-unit-id="209">
+                                <span class="unit-remaining" id="atk-209-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Espionage Probe</span>
+                                <input type="number" class="unit-input" id="atk-210" min="0" value="0" data-unit-id="210">
+                                <span class="unit-remaining" id="atk-210-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Bomber</span>
+                                <input type="number" class="unit-input" id="atk-211" min="0" value="0" data-unit-id="211">
+                                <span class="unit-remaining" id="atk-211-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Destroyer</span>
+                                <input type="number" class="unit-input" id="atk-213" min="0" value="0" data-unit-id="213">
+                                <span class="unit-remaining" id="atk-213-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Deathstar</span>
+                                <input type="number" class="unit-input" id="atk-214" min="0" value="0" data-unit-id="214">
+                                <span class="unit-remaining" id="atk-214-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Battlecruiser</span>
+                                <input type="number" class="unit-input" id="atk-215" min="0" value="0" data-unit-id="215">
+                                <span class="unit-remaining" id="atk-215-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Reaper</span>
+                                <input type="number" class="unit-input" id="atk-218" min="0" value="0" data-unit-id="218">
+                                <span class="unit-remaining" id="atk-218-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Pathfinder</span>
+                                <input type="number" class="unit-input" id="atk-219" min="0" value="0" data-unit-id="219">
+                                <span class="unit-remaining" id="atk-219-remaining"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Attacker Coordinates -->
+                    <div class="units-section">
+                        <h3>Coordinates</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Galaxy:System:Planet</span>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="number" class="coord-input" id="originGalaxy" min="1" max="9" value="1" placeholder="G">
+                                    <input type="number" class="coord-input" id="originSystem" min="1" max="499" value="1" placeholder="S">
+                                    <input type="number" class="coord-input" id="originPlanet" min="1" max="16" value="1" placeholder="P">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Defender Panel -->
+                <div class="side-panel defender-panel">
+                    <h2 class="panel-title">🛡️ Defenders</h2>
+
+                    <!-- Technologies -->
+                    <div class="tech-section">
+                        <h3>Technologies</h3>
+                        <div class="tech-inputs">
+                            <label>
+                                <span>Weapons</span>
+                                <input type="number" id="defWeapons" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Shielding</span>
+                                <input type="number" id="defShielding" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Armour</span>
+                                <input type="number" id="defArmour" min="0" max="50" value="0">
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Ships -->
+                    <div class="units-section">
+                        <h3>Ships</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Small Cargo</span>
+                                <input type="number" class="unit-input" id="def-202" min="0" value="0" data-unit-id="202">
+                                <span class="unit-remaining" id="def-202-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Large Cargo</span>
+                                <input type="number" class="unit-input" id="def-203" min="0" value="0" data-unit-id="203">
+                                <span class="unit-remaining" id="def-203-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Light Fighter</span>
+                                <input type="number" class="unit-input" id="def-204" min="0" value="0" data-unit-id="204">
+                                <span class="unit-remaining" id="def-204-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Heavy Fighter</span>
+                                <input type="number" class="unit-input" id="def-205" min="0" value="0" data-unit-id="205">
+                                <span class="unit-remaining" id="def-205-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Cruiser</span>
+                                <input type="number" class="unit-input" id="def-206" min="0" value="0" data-unit-id="206">
+                                <span class="unit-remaining" id="def-206-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Battleship</span>
+                                <input type="number" class="unit-input" id="def-207" min="0" value="0" data-unit-id="207">
+                                <span class="unit-remaining" id="def-207-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Colony Ship</span>
+                                <input type="number" class="unit-input" id="def-208" min="0" value="0" data-unit-id="208">
+                                <span class="unit-remaining" id="def-208-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Recycler</span>
+                                <input type="number" class="unit-input" id="def-209" min="0" value="0" data-unit-id="209">
+                                <span class="unit-remaining" id="def-209-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Espionage Probe</span>
+                                <input type="number" class="unit-input" id="def-210" min="0" value="0" data-unit-id="210">
+                                <span class="unit-remaining" id="def-210-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Bomber</span>
+                                <input type="number" class="unit-input" id="def-211" min="0" value="0" data-unit-id="211">
+                                <span class="unit-remaining" id="def-211-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Destroyer</span>
+                                <input type="number" class="unit-input" id="def-213" min="0" value="0" data-unit-id="213">
+                                <span class="unit-remaining" id="def-213-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Deathstar</span>
+                                <input type="number" class="unit-input" id="def-214" min="0" value="0" data-unit-id="214">
+                                <span class="unit-remaining" id="def-214-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Battlecruiser</span>
+                                <input type="number" class="unit-input" id="def-215" min="0" value="0" data-unit-id="215">
+                                <span class="unit-remaining" id="def-215-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Reaper</span>
+                                <input type="number" class="unit-input" id="def-218" min="0" value="0" data-unit-id="218">
+                                <span class="unit-remaining" id="def-218-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Pathfinder</span>
+                                <input type="number" class="unit-input" id="def-219" min="0" value="0" data-unit-id="219">
+                                <span class="unit-remaining" id="def-219-remaining"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Defender Coordinates -->
+                    <div class="units-section">
+                        <h3>Coordinates</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Galaxy:System:Planet</span>
+                                <div style="display: flex; gap: 5px;">
+                                    <input type="number" class="coord-input" id="targetGalaxy" min="1" max="9" value="1" placeholder="G">
+                                    <input type="number" class="coord-input" id="targetSystem" min="1" max="499" value="100" placeholder="S">
+                                    <input type="number" class="coord-input" id="targetPlanet" min="1" max="16" value="1" placeholder="P">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Settings Panel -->
+                <div class="settings-panel">
+                    <h2 class="panel-title">🌍 Defender Planet/Moon</h2>
+
+                    <div class="units-section">
+                        <h3>Resources</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Metal</span>
+                                <input type="number" class="unit-input" id="defenderMetal" min="0" value="0">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Crystal</span>
+                                <input type="number" class="unit-input" id="defenderCrystal" min="0" value="0">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Deuterium</span>
+                                <input type="number" class="unit-input" id="defenderDeuterium" min="0" value="0">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Defense -->
+                    <div class="units-section">
+                        <h3>Defense</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Rocket Launcher</span>
+                                <input type="number" class="unit-input" id="def-401" min="0" value="0" data-unit-id="401">
+                                <span class="unit-remaining" id="def-401-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Light Laser</span>
+                                <input type="number" class="unit-input" id="def-402" min="0" value="0" data-unit-id="402">
+                                <span class="unit-remaining" id="def-402-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Heavy Laser</span>
+                                <input type="number" class="unit-input" id="def-403" min="0" value="0" data-unit-id="403">
+                                <span class="unit-remaining" id="def-403-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Gauss Cannon</span>
+                                <input type="number" class="unit-input" id="def-404" min="0" value="0" data-unit-id="404">
+                                <span class="unit-remaining" id="def-404-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Ion Cannon</span>
+                                <input type="number" class="unit-input" id="def-405" min="0" value="0" data-unit-id="405">
+                                <span class="unit-remaining" id="def-405-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Plasma Turret</span>
+                                <input type="number" class="unit-input" id="def-406" min="0" value="0" data-unit-id="406">
+                                <span class="unit-remaining" id="def-406-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Small Shield Dome</span>
+                                <input type="number" class="unit-input" id="def-407" min="0" value="0" data-unit-id="407">
+                                <span class="unit-remaining" id="def-407-remaining"></span>
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Large Shield Dome</span>
+                                <input type="number" class="unit-input" id="def-408" min="0" value="0" data-unit-id="408">
+                                <span class="unit-remaining" id="def-408-remaining"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2 class="panel-title">📍 Flight Time</h2>
+
+                    <div class="units-section">
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Fleet Speed (%)</span>
+                                <input type="number" class="unit-input" id="fleetSpeedPercent" min="1" max="100" value="100">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="units-section" id="flightTimeResult" style="display: none;">
+                        <div class="flight-time-display" id="flightTimeDisplay"></div>
+                    </div>
+
+                    <h2 class="panel-title">⚙️ Universe Settings</h2>
+
+                    <div class="units-section">
+                        <h3>Fleet Speed</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">War</span>
+                                <input type="number" class="unit-input" id="fleetSpeedWar" min="1" value="1">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Holding</span>
+                                <input type="number" class="unit-input" id="fleetSpeedHolding" min="1" value="1">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Peaceful</span>
+                                <input type="number" class="unit-input" id="fleetSpeedPeaceful" min="1" value="1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="units-section">
+                        <h3>Simulation</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Runs</span>
+                                <input type="number" class="unit-input" id="simulationRuns" min="1" max="100" value="5">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Plunder (%)</span>
+                                <select id="plunderPercent" class="unit-input">
+                                    <option value="50" selected>50%</option>
+                                    <option value="75">75%</option>
+                                    <option value="100">100%</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="units-section">
+                        <h3>Debris Field</h3>
+                        <div class="unit-inputs">
+                            <div class="unit-row">
+                                <span class="unit-name">Ships (%)</span>
+                                <input type="number" class="unit-input" id="debrisShipPercent" min="0" max="100" value="30">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Defense (%)</span>
+                                <input type="number" class="unit-input" id="debrisDefensePercent" min="0" max="100" value="0">
+                            </div>
+                            <div class="unit-row">
+                                <span class="unit-name">Deuterium</span>
+                                <input type="checkbox" class="unit-checkbox" id="debrisDeuteriumEnabled">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Panel -->
+                <div class="results-panel">
+                    <h2 class="panel-title">📊 Results</h2>
+
+                    <div class="wreckfield-section" id="outcomeSection" style="display: none;">
+                        <h3 id="outcomeTitle">Battle Outcome</h3>
+                        <div class="resource-row">
+                            <span>Winner:</span>
+                            <span id="battleWinner">-</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Rounds:</span>
+                            <span id="battleRounds">0</span>
+                        </div>
+                    </div>
+
+                    <div class="plunder-section" id="plunderSection" style="display: none;">
+                        <h3>💰 Plunder</h3>
+                        <div class="resource-row">
+                            <span>Metal:</span>
+                            <span id="plunderMetal">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Crystal:</span>
+                            <span id="plunderCrystal">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Deuterium:</span>
+                            <span id="plunderDeuterium">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span><strong>Total:</strong></span>
+                            <span id="plunderTotal">0</span>
+                        </div>
+                    </div>
+
+                    <div class="wreckfield-section" id="wreckfieldSection" style="display: none;">
+                        <h3>💥 Debris Field</h3>
+                        <div class="resource-row">
+                            <span>Metal:</span>
+                            <span id="debrisMetal">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Crystal:</span>
+                            <span id="debrisCrystal">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Deuterium:</span>
+                            <span id="debrisDeuterium">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span><strong>Total:</strong></span>
+                            <span id="debrisTotal">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Recyclers needed:</span>
+                            <span id="recyclersNeeded">0</span>
+                        </div>
+                    </div>
+
+                    <div class="wreckfield-section" id="profitSection" style="display: none;">
+                        <h3>📈 Profit/Loss</h3>
+                        <div class="resource-row">
+                            <span>Total Gain:</span>
+                            <span id="totalGain">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Total Loss:</span>
+                            <span id="totalLoss">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span><strong>Net Profit:</strong></span>
+                            <span id="netProfit">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="button-section">
+                <button id="simulateBtn" class="simulate-btn">⚡ Simulate Battle</button>
+                <button id="clearBtn" class="clear-btn">🗑️ Clear All</button>
+                <button id="exampleBtn" class="example-btn">📋 Load Example</button>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultSection" class="result-section" style="display: none;">
+                <h2>📊 Battle Results</h2>
+                <div class="tabs-container">
+                    <div class="tabs-header" id="tabsHeader"></div>
+                    <div class="tabs-content" id="tabsContent"></div>
+                </div>
+                <div id="debrisInfo" class="debris-info"></div>
+            </div>
+
+            <!-- Error Section -->
+            <div id="errorSection" class="error-section" style="display: none;">
+                <h3>⚠️ Error</h3>
+                <div id="errorMessage"></div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Based on OGameX Battle Engine</p>
+            <p class="tech-info">⚡ Near-native performance | 🔒 100% client-side | 📡 Works offline</p>
+        </footer>
+    </div>
+
+    <!-- Loading overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner-container">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">⏳ Simulating battle...</div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

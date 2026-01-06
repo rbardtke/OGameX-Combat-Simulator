@@ -1,0 +1,12 @@
+# OGameX Combat Simulator - Python Version
+# No external dependencies required - uses only Python standard library
+
+# Minimum Python version: 3.7+
+# - Uses dataclasses (introduced in Python 3.7)
+# - Uses type hints
+# - Uses f-strings
+
+# For development/testing (optional):
+# pytest>=7.0.0
+# black>=22.0.0
+# mypy>=0.990

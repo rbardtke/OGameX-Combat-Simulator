@@ -1,0 +1,263 @@
+# GitLab CI/CD - Auto-Sync with OGameX
+
+stages:
+  - check
+  - sync
+  - notify
+
+variables:
+  OGAMEX_REPO: "https://github.com/lanedirt/OGameX.git"
+  GIT_DEPTH: 0
+
+# Run daily at 3 AM UTC
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "api"
+
+check_updates:
+  stage: check
+  image: alpine/git:latest
+  script:
+    - echo "Checking for OGameX updates..."
+
+    # Clone OGameX
+    - git clone --depth 50 $OGAMEX_REPO ogamex-upstream
+
+    # Get commit info
+    - cd ogamex-upstream
+    - LATEST_COMMIT=$(git rev-parse HEAD)
+    - LATEST_SHORT=$(git rev-parse --short HEAD)
+    - cd ..
+
+    # Get last synced commit
+    - LAST_SYNCED=$(cat .ogamex-last-sync 2>/dev/null || echo "none")
+    - LAST_SYNCED_SHORT=$(echo $LAST_SYNCED | cut -c1-7)
+
+    - echo "Last synced commit = $LAST_SYNCED_SHORT"
+    - echo "Latest OGameX commit = $LATEST_SHORT"
+
+    # Check if updates available
+    - |
+      if [ "$LATEST_COMMIT" != "$LAST_SYNCED" ]; then
+        echo "UPDATE_AVAILABLE=true" >> sync.env
+        echo "✓ Updates detected"
+      else
+        echo "UPDATE_AVAILABLE=false" >> sync.env
+        echo "✓ No updates"
+      fi
+
+    - echo "LATEST_COMMIT=$LATEST_COMMIT" >> sync.env
+    - echo "LATEST_SHORT=$LATEST_SHORT" >> sync.env
+    - echo "LAST_SYNCED=$LAST_SYNCED" >> sync.env
+    - echo "LAST_SYNCED_SHORT=$LAST_SYNCED_SHORT" >> sync.env
+
+  artifacts:
+    reports:
+      dotenv: sync.env
+    paths:
+      - ogamex-upstream/
+      - sync.env
+    expire_in: 1 day
+
+analyze_changes:
+  stage: check
+  image: alpine/git:latest
+  needs:
+    - check_updates
+  rules:
+    - if: $UPDATE_AVAILABLE == "true"
+  script:
+    - echo "Analyzing changes..."
+    - cd ogamex-upstream
+
+    # Get changed files
+    - |
+      CHANGED_FILES=$(git diff --name-only $LAST_SYNCED..HEAD 2>/dev/null || echo "")
+      echo "$CHANGED_FILES" > ../changed_files.txt
+
+    # Check critical files
+    - BATTLE_CHANGED=$(echo "$CHANGED_FILES" | grep -E "BattleEngine|BattleResult" || echo "")
+    - FLEET_CHANGED=$(echo "$CHANGED_FILES" | grep -E "FleetMissionService|CoordinateDistanceCalculator" || echo "")
+    - SPEED_CHANGED=$(echo "$CHANGED_FILES" | grep -E "SpeedPropertyService" || echo "")
+
+    # Determine auto-sync safety
+    - AUTO_SAFE="true"
+    - |
+      if [ ! -z "$BATTLE_CHANGED" ] || [ ! -z "$FLEET_CHANGED" ]; then
+        AUTO_SAFE="false"
+      fi
+
+    - echo "AUTO_SAFE=$AUTO_SAFE" >> ../analyze.env
+    - echo "BATTLE_CHANGED=$BATTLE_CHANGED" >> ../analyze.env
+    - echo "FLEET_CHANGED=$FLEET_CHANGED" >> ../analyze.env
+    - echo "SPEED_CHANGED=$SPEED_CHANGED" >> ../analyze.env
+
+    # Get commit log
+    - git log --pretty=format:"- %h - %s" $LAST_SYNCED..HEAD > ../commits.txt
+
+    - cd ..
+    - echo "Analysis complete. Auto-safe = $AUTO_SAFE"
+
+  artifacts:
+    reports:
+      dotenv: analyze.env
+    paths:
+      - changed_files.txt
+      - commits.txt
+      - analyze.env
+    expire_in: 1 day
+
+create_merge_request:
+  stage: sync
+  image: alpine/git:latest
+  needs:
+    - check_updates
+    - analyze_changes
+  rules:
+    - if: $UPDATE_AVAILABLE == "true" && $AUTO_SAFE == "true"
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "Creating merge request for safe changes..."
+
+    # Create a new branch
+    - git config user.email "bot@gitlab.com"
+    - git config user.name "OGameX Sync Bot"
+    - git checkout -b auto-sync-ogamex-$LATEST_SHORT
+
+    # Update sync marker
+    - echo "$LATEST_COMMIT" > .ogamex-last-sync
+    - git add .ogamex-last-sync
+    - git commit -m "🤖 Auto-sync with OGameX $LATEST_SHORT"
+
+    # Push branch
+    - git push -o merge_request.create \
+        -o merge_request.title="🤖 Auto-sync OGameX $LATEST_SHORT (Safe Changes)" \
+        -o merge_request.description="Automated sync from OGameX upstream. Safe, non-breaking changes only." \
+        -o merge_request.label="auto-sync" \
+        -o merge_request.label="ogamex-update" \
+        https://oauth2:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git \
+        auto-sync-ogamex-$LATEST_SHORT
+
+    - echo "✓ Merge request created"
+
+create_issue:
+  stage: notify
+  image: alpine:latest
+  needs:
+    - check_updates
+    - analyze_changes
+  rules:
+    - if: $UPDATE_AVAILABLE == "true" && $AUTO_SAFE == "false"
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - echo "Creating issue for critical changes..."
+
+    # Read commits
+    - COMMITS=$(cat commits.txt)
+
+    # Create issue via GitLab API
+    - |
+      curl --request POST \
+        --header "PRIVATE-TOKEN: ${CI_JOB_TOKEN}" \
+        --header "Content-Type: application/json" \
+        --data "{
+          \"title\": \"🔴 CRITICAL - OGameX Update Requires Manual Sync\",
+          \"description\": \"## Critical Changes Detected\n\nOGameX has updates affecting critical battle engine code.\n\n### Changes\n- Battle Engine: ${BATTLE_CHANGED:-No changes}\n- Fleet Calc: ${FLEET_CHANGED:-No changes}\n\n### Commits\n\`\`\`\n${COMMITS}\n\`\`\`\n\n### Action Required\nManual review and update needed.\n\nSee: https://github.com/lanedirt/OGameX/compare/${LAST_SYNCED_SHORT}...${LATEST_SHORT}\",
+          \"labels\": \"critical,ogamex-sync,manual-review\"
+        }" \
+        "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/issues"
+
+    - echo "✓ Issue created"
+
+notify_slack:
+  stage: notify
+  image: curlimages/curl:latest
+  needs:
+    - check_updates
+    - analyze_changes
+  rules:
+    - if: $UPDATE_AVAILABLE == "true" && $SLACK_WEBHOOK_URL != null
+  script:
+    - |
+      if [ "$AUTO_SAFE" = "true" ]; then
+        MESSAGE="🤖 OGameX auto-sync: PR created with safe changes ($LATEST_SHORT)"
+        COLOR="good"
+      else
+        MESSAGE="🔴 OGameX critical update detected - Manual review required ($LATEST_SHORT)"
+        COLOR="danger"
+      fi
+
+    - |
+      curl -X POST $SLACK_WEBHOOK_URL \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"attachments\": [{
+            \"color\": \"$COLOR\",
+            \"title\": \"OGameX Battle Simulator Sync\",
+            \"text\": \"$MESSAGE\",
+            \"fields\": [
+              {\"title\": \"Last Synced\", \"value\": \"$LAST_SYNCED_SHORT\", \"short\": true},
+              {\"title\": \"Latest Commit\", \"value\": \"$LATEST_SHORT\", \"short\": true}
+            ]
+          }]
+        }"
+
+notify_discord:
+  stage: notify
+  image: curlimages/curl:latest
+  needs:
+    - check_updates
+    - analyze_changes
+  rules:
+    - if: $UPDATE_AVAILABLE == "true" && $DISCORD_WEBHOOK_URL != null
+  script:
+    - |
+      if [ "$AUTO_SAFE" = "true" ]; then
+        MESSAGE="🤖 **OGameX Auto-Sync**: Pull request created with safe changes (\`$LATEST_SHORT\`)"
+        COLOR=3066993
+      else
+        MESSAGE="🔴 **OGameX Critical Update**: Manual review required (\`$LATEST_SHORT\`)"
+        COLOR=15158332
+      fi
+
+    - |
+      curl -X POST $DISCORD_WEBHOOK_URL \
+        -H 'Content-Type: application/json' \
+        -d "{
+          \"embeds\": [{
+            \"title\": \"OGameX Battle Simulator Sync\",
+            \"description\": \"$MESSAGE\",
+            \"color\": $COLOR,
+            \"fields\": [
+              {\"name\": \"Last Synced\", \"value\": \"\`$LAST_SYNCED_SHORT\`\", \"inline\": true},
+              {\"name\": \"Latest\", \"value\": \"\`$LATEST_SHORT\`\", \"inline\": true}
+            ]
+          }]
+        }"
+
+# Optional: Email notification
+notify_email:
+  stage: notify
+  image: alpine:latest
+  needs:
+    - check_updates
+    - analyze_changes
+  rules:
+    - if: $UPDATE_AVAILABLE == "true" && $NOTIFICATION_EMAIL != null
+  before_script:
+    - apk add --no-cache mailx
+  script:
+    - |
+      if [ "$AUTO_SAFE" = "true" ]; then
+        SUBJECT="OGameX Auto-Sync: PR Created"
+        BODY="Pull request created with safe changes from OGameX $LATEST_SHORT"
+      else
+        SUBJECT="OGameX Critical Update - Action Required"
+        BODY="Critical changes detected in OGameX $LATEST_SHORT - Manual review needed"
+      fi
+
+    - echo "$BODY" | mail -s "$SUBJECT" $NOTIFICATION_EMAIL

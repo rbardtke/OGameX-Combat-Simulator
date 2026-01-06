@@ -1,0 +1,187 @@
+name: Check OGameX Updates
+
+on:
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch: # Allow manual trigger from Actions tab
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout this repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout OGameX
+        uses: actions/checkout@v4
+        with:
+          repository: lanedirt/OGameX
+          path: ogamex
+          fetch-depth: 0
+
+      - name: Check for updates
+        id: check
+        run: |
+          # Get latest OGameX commit
+          cd ogamex
+          LATEST_COMMIT=$(git rev-parse HEAD)
+          LATEST_SHORT=$(git rev-parse --short HEAD)
+
+          cd ..
+
+          # Get last synced commit
+          LAST_SYNCED=$(cat .ogamex-last-sync 2>/dev/null || echo "none")
+          LAST_SYNCED_SHORT=$(echo $LAST_SYNCED | cut -c1-7)
+
+          echo "latest=$LATEST_COMMIT" >> $GITHUB_OUTPUT
+          echo "latest_short=$LATEST_SHORT" >> $GITHUB_OUTPUT
+          echo "last_synced=$LAST_SYNCED" >> $GITHUB_OUTPUT
+          echo "last_synced_short=$LAST_SYNCED_SHORT" >> $GITHUB_OUTPUT
+
+          if [ "$LATEST_COMMIT" != "$LAST_SYNCED" ] && [ "$LAST_SYNCED" != "none" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "✓ Updates detected"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "✓ No updates"
+          fi
+
+      - name: Analyze changes
+        if: steps.check.outputs.changed == 'true'
+        id: analyze
+        run: |
+          cd ogamex
+
+          # Count commits
+          COMMIT_COUNT=$(git rev-list --count ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }})
+          echo "commit_count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
+
+          # Check specific files
+          BATTLE_ENGINE=$(git diff --name-only ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }} | grep -E "BattleEngine\.php|BattleResult\.php" || echo "")
+          FLEET_CALC=$(git diff --name-only ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }} | grep -E "FleetMissionService\.php|CoordinateDistanceCalculator\.php" || echo "")
+          SPEED_CALC=$(git diff --name-only ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }} | grep -E "SpeedPropertyService\.php" || echo "")
+          UNITS=$(git diff --name-only ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }} | grep -E "UnitObject\.php|Models/Units/" || echo "")
+
+          # Set outputs
+          if [ ! -z "$BATTLE_ENGINE" ]; then echo "battle_engine_changed=true" >> $GITHUB_OUTPUT; else echo "battle_engine_changed=false" >> $GITHUB_OUTPUT; fi
+          if [ ! -z "$FLEET_CALC" ]; then echo "fleet_calc_changed=true" >> $GITHUB_OUTPUT; else echo "fleet_calc_changed=false" >> $GITHUB_OUTPUT; fi
+          if [ ! -z "$SPEED_CALC" ]; then echo "speed_calc_changed=true" >> $GITHUB_OUTPUT; else echo "speed_calc_changed=false" >> $GITHUB_OUTPUT; fi
+          if [ ! -z "$UNITS" ]; then echo "units_changed=true" >> $GITHUB_OUTPUT; else echo "units_changed=false" >> $GITHUB_OUTPUT; fi
+
+          # Get commit log
+          git log --pretty=format:"- %h - %s (%ar)" ${{ steps.check.outputs.last_synced }}..${{ steps.check.outputs.latest }} -- \
+            'app/GameObjects/Services/BattleEngine.php' \
+            'app/GameObjects/Models/BattleResult.php' \
+            'app/Services/FleetMissionService.php' \
+            'app/Services/CoordinateDistanceCalculator.php' \
+            'app/GameObjects/Services/Properties/SpeedPropertyService.php' \
+            'app/GameObjects/Services/Properties/' \
+            'app/GameObjects/Models/UnitObject.php' \
+            'app/GameObjects/Models/Units/' > ../commit_log.txt || echo "No relevant commits found" > ../commit_log.txt
+
+      - name: Create issue for updates
+        if: steps.check.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const commitLog = fs.readFileSync('commit_log.txt', 'utf8');
+
+            // Determine severity
+            let severity = '🟢 LOW';
+            let labels = ['ogamex-sync'];
+
+            if ('${{ steps.analyze.outputs.battle_engine_changed }}' === 'true' ||
+                '${{ steps.analyze.outputs.fleet_calc_changed }}' === 'true') {
+              severity = '🔴 CRITICAL';
+              labels.push('critical', 'needs-immediate-attention');
+            } else if ('${{ steps.analyze.outputs.speed_calc_changed }}' === 'true' ||
+                       '${{ steps.analyze.outputs.units_changed }}' === 'true') {
+              severity = '🟡 MEDIUM';
+              labels.push('needs-review');
+            }
+
+            // Build impact section
+            let impact = '';
+            if ('${{ steps.analyze.outputs.battle_engine_changed }}' === 'true') {
+              impact += '- ⚠️ **CRITICAL**: Battle Engine changed → Update `src/lib.rs`\n';
+            }
+            if ('${{ steps.analyze.outputs.fleet_calc_changed }}' === 'true') {
+              impact += '- ⚠️ **CRITICAL**: Fleet/Distance calculation changed → Update `browser-extension/app.js` (flight time)\n';
+            }
+            if ('${{ steps.analyze.outputs.speed_calc_changed }}' === 'true') {
+              impact += '- ⚠️ **WARNING**: Speed calculation changed → Update `browser-extension/app.js` (drive bonuses)\n';
+            }
+            if ('${{ steps.analyze.outputs.units_changed }}' === 'true') {
+              impact += '- ⚠️ **WARNING**: Unit definitions changed → Update `browser-extension/app.js` (UNITS constant)\n';
+            }
+            if (!impact) {
+              impact = '- ℹ️ Other changes detected, review recommended\n';
+            }
+
+            const body = `## ${severity} - OGameX Update Available
+
+            OGameX has **${{ steps.analyze.outputs.commit_count }}** new commit(s) that may affect the battle simulator.
+
+            ### 📊 Impact Analysis
+
+            ${impact}
+
+            ### 📝 Changed Commits
+
+            \`\`\`
+            ${commitLog}
+            \`\`\`
+
+            ### 🔗 Review Links
+
+            - [View changes on GitHub](https://github.com/lanedirt/OGameX/compare/${{ steps.check.outputs.last_synced_short }}...${{ steps.check.outputs.latest_short }})
+            - [Battle Engine diff](https://github.com/lanedirt/OGameX/compare/${{ steps.check.outputs.last_synced_short }}...${{ steps.check.outputs.latest_short }}#diff-battle-engine)
+
+            ### ✅ Update Checklist
+
+            - [ ] Review OGameX changes via link above
+            - [ ] Update Rust battle engine (\`src/lib.rs\`) if needed
+            - [ ] Update flight time calculator (\`browser-extension/app.js\`) if needed
+            - [ ] Update drive bonuses (\`browser-extension/app.js\`) if needed
+            - [ ] Update unit definitions (\`browser-extension/app.js\`) if needed
+            - [ ] Rebuild: \`./build.sh\`
+            - [ ] Test all features in browser
+            - [ ] Update sync marker: \`echo "${{ steps.check.outputs.latest }}" > .ogamex-last-sync\`
+            - [ ] Commit changes
+            - [ ] Close this issue
+
+            ### 📌 Version Info
+
+            - **Last synced**: \`${{ steps.check.outputs.last_synced_short }}\`
+            - **Latest commit**: \`${{ steps.check.outputs.latest_short }}\`
+            - **Commits behind**: ${{ steps.analyze.outputs.commit_count }}
+
+            ---
+
+            *This issue was automatically created by the OGameX sync workflow.*`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `${severity} - OGameX Update Available (${{ steps.check.outputs.commit_count }} commits)`,
+              body: body,
+              labels: labels
+            });
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.check.outputs.changed }}" = "true" ]; then
+            echo "✓ Updates detected - Issue created"
+            echo "  Commits: ${{ steps.analyze.outputs.commit_count }}"
+            echo "  Battle Engine: ${{ steps.analyze.outputs.battle_engine_changed }}"
+            echo "  Fleet Calc: ${{ steps.analyze.outputs.fleet_calc_changed }}"
+            echo "  Speed Calc: ${{ steps.analyze.outputs.speed_calc_changed }}"
+            echo "  Units: ${{ steps.analyze.outputs.units_changed }}"
+          else
+            echo "✓ No updates - Already in sync with OGameX"
+          fi

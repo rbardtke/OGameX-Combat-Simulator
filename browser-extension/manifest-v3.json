@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "OGameX Combat Simulator",
+  "version": "1.0.0",
+  "description": "Fast OGame combat simulator powered by Rust and WebAssembly",
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "action": {
+    "default_title": "OGame Combat Simulator"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["pkg/*"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

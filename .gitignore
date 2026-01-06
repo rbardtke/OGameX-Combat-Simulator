@@ -1,0 +1,17 @@
+# Rust
+/target
+Cargo.lock
+
+# WASM build output
+OGameX-CombatSim/pkg/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
