@@ -15,6 +15,8 @@ High-performance OGame combat simulator with Rust/WASM engine and Python impleme
 
 ### Users
 
+![Screenshot of a OgameX Combat Simulator.](/assets/OGameX-Combat-Simulator.png)
+
 **Browser Extension**:
 1. Download latest release ZIP
 2. Extract to permanent folder
