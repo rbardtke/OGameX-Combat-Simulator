@@ -43,8 +43,12 @@
                                 <input type="number" id="atkImpulse" min="0" max="50" value="0">
                             </label>
                             <label>
-                                <span>Hyperspace</span>
+                                <span>Hyperspace Drive</span>
                                 <input type="number" id="atkHyperspace" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Hyperspace Tech</span>
+                                <input type="number" id="atkHyperspaceTech" min="0" max="50" value="0">
                             </label>
                         </div>
                     </div>
@@ -166,6 +170,22 @@
                             <label>
                                 <span>Armour</span>
                                 <input type="number" id="defArmour" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Combustion</span>
+                                <input type="number" id="defCombustion" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Impulse</span>
+                                <input type="number" id="defImpulse" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Hyperspace Drive</span>
+                                <input type="number" id="defHyperspace" min="0" max="50" value="0">
+                            </label>
+                            <label>
+                                <span>Hyperspace Tech</span>
+                                <input type="number" id="defHyperspaceTech" min="0" max="50" value="0">
                             </label>
                         </div>
                     </div>
@@ -336,6 +356,7 @@
                                 <span class="unit-remaining" id="def-408-remaining"></span>
                             </div>
                         </div>
+                        <button id="ipmSimBtn" class="ipm-sim-btn">🚀 IPM Simulation</button>
                     </div>
 
                     <h2 class="panel-title">📍 Flight Time</h2>
@@ -444,6 +465,22 @@
                             <span><strong>Total:</strong></span>
                             <span id="plunderTotal">0</span>
                         </div>
+                        <div class="resource-row">
+                            <span>Cargo Capacity:</span>
+                            <span id="cargoCapacity">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Captured:</span>
+                            <span id="capturePercent">0%</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Small Cargos needed:</span>
+                            <span id="smallCargosNeeded">0</span>
+                        </div>
+                        <div class="resource-row">
+                            <span>Large Cargos needed:</span>
+                            <span id="largeCargosNeeded">0</span>
+                        </div>
                     </div>
 
                     <div class="wreckfield-section" id="wreckfieldSection" style="display: none;">
@@ -467,6 +504,68 @@
                         <div class="resource-row">
                             <span>Recyclers needed:</span>
                             <span id="recyclersNeeded">0</span>
+                        </div>
+                    </div>
+
+                    <div class="reaper-section" id="reaperSection" style="display: none;">
+                        <h3>🚀 Reaper Debris Collection (30%)</h3>
+                        <div id="attackerReaperCollection" style="display: none;">
+                            <h4>Attacker Reapers</h4>
+                            <div class="resource-row">
+                                <span>Surviving Reapers:</span>
+                                <span id="atkReaperCount">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Cargo Capacity:</span>
+                                <span id="atkReaperCapacity">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Metal collected:</span>
+                                <span id="atkReaperMetal">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Crystal collected:</span>
+                                <span id="atkReaperCrystal">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Deuterium collected:</span>
+                                <span id="atkReaperDeuterium">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span><strong>Total collected:</strong></span>
+                                <span id="atkReaperTotal">0</span>
+                            </div>
+                        </div>
+                        <div id="defenderReaperCollection" style="display: none;">
+                            <h4>Defender Reapers</h4>
+                            <div class="resource-row">
+                                <span>Surviving Reapers:</span>
+                                <span id="defReaperCount">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Cargo Capacity:</span>
+                                <span id="defReaperCapacity">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Metal collected:</span>
+                                <span id="defReaperMetal">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Crystal collected:</span>
+                                <span id="defReaperCrystal">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span>Deuterium collected:</span>
+                                <span id="defReaperDeuterium">0</span>
+                            </div>
+                            <div class="resource-row">
+                                <span><strong>Total collected:</strong></span>
+                                <span id="defReaperTotal">0</span>
+                            </div>
+                        </div>
+                        <div class="resource-row remaining-debris">
+                            <span><strong>Remaining Debris:</strong></span>
+                            <span id="remainingDebris">0</span>
                         </div>
                     </div>
 
@@ -523,6 +622,144 @@
         <div class="spinner-container">
             <div class="spinner"></div>
             <div class="loading-text" id="loadingText">⏳ Simulating battle...</div>
+        </div>
+    </div>
+
+    <!-- IPM Simulation Modal -->
+    <div id="ipmModal" class="modal" style="display: none;">
+        <div class="modal-content ipm-modal">
+            <div class="modal-header">
+                <h2>🚀 Interplanetary Missile Simulation</h2>
+                <button class="modal-close" id="ipmModalClose">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ipm-grid">
+                    <!-- Attack Settings -->
+                    <div class="ipm-section">
+                        <h3>Attack Settings</h3>
+                        <div class="ipm-inputs">
+                            <div class="ipm-row">
+                                <span>Interplanetary Missiles:</span>
+                                <input type="number" id="ipmCount" min="0" value="10">
+                            </div>
+                            <div class="ipm-row">
+                                <span>Attacker Weapons Tech:</span>
+                                <span class="ipm-tech-value" id="ipmWeaponsTechDisplay">0</span>
+                            </div>
+                            <div class="ipm-row">
+                                <span>Target Priority:</span>
+                                <select id="ipmTarget">
+                                    <option value="0">Cheapest First</option>
+                                    <option value="1">Most Expensive First</option>
+                                    <option value="401">Rocket Launcher</option>
+                                    <option value="402">Light Laser</option>
+                                    <option value="403">Heavy Laser</option>
+                                    <option value="404">Gauss Cannon</option>
+                                    <option value="405">Ion Cannon</option>
+                                    <option value="406">Plasma Turret</option>
+                                    <option value="407">Small Shield Dome</option>
+                                    <option value="408">Large Shield Dome</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Defense Settings -->
+                    <div class="ipm-section">
+                        <h3>Defense Settings</h3>
+                        <div class="ipm-inputs">
+                            <div class="ipm-row">
+                                <span>Anti-Ballistic Missiles:</span>
+                                <input type="number" id="ipmAbm" min="0" value="0">
+                            </div>
+                            <div class="ipm-row">
+                                <span>Defender Armour Tech:</span>
+                                <span class="ipm-tech-value" id="ipmArmourTechDisplay">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Current Defense -->
+                <div class="ipm-section">
+                    <h3>Current Defense</h3>
+                    <div class="ipm-defense-grid">
+                        <div class="ipm-defense-row">
+                            <span>Rocket Launcher:</span>
+                            <input type="number" id="ipm-def-401" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-401"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Light Laser:</span>
+                            <input type="number" id="ipm-def-402" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-402"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Heavy Laser:</span>
+                            <input type="number" id="ipm-def-403" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-403"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Gauss Cannon:</span>
+                            <input type="number" id="ipm-def-404" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-404"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Ion Cannon:</span>
+                            <input type="number" id="ipm-def-405" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-405"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Plasma Turret:</span>
+                            <input type="number" id="ipm-def-406" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-406"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Small Shield Dome:</span>
+                            <input type="number" id="ipm-def-407" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-407"></span>
+                        </div>
+                        <div class="ipm-defense-row">
+                            <span>Large Shield Dome:</span>
+                            <input type="number" id="ipm-def-408" min="0" value="0">
+                            <span class="ipm-remaining" id="ipm-remaining-408"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div class="ipm-section ipm-results" id="ipmResults" style="display: none;">
+                    <h3>💥 Attack Results</h3>
+                    <div class="ipm-result-info">
+                        <div class="ipm-result-row">
+                            <span>Missiles Sent:</span>
+                            <span id="ipmMissilesSent">0</span>
+                        </div>
+                        <div class="ipm-result-row">
+                            <span>Missiles Intercepted:</span>
+                            <span id="ipmMissilesIntercepted">0</span>
+                        </div>
+                        <div class="ipm-result-row">
+                            <span>Missiles Hit:</span>
+                            <span id="ipmMissilesHit">0</span>
+                        </div>
+                        <div class="ipm-result-row">
+                            <span>Total Damage:</span>
+                            <span id="ipmTotalDamage">0</span>
+                        </div>
+                        <div class="ipm-result-row">
+                            <span>Damage Used:</span>
+                            <span id="ipmDamageUsed">0</span>
+                        </div>
+                    </div>
+                    <div class="ipm-destroyed-list" id="ipmDestroyedList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="ipmSimulateBtn" class="simulate-btn">🚀 Simulate Attack</button>
+                <button id="ipmApplyBtn" class="apply-btn" style="display: none;">✅ Apply to Defender</button>
+                <button id="ipmResetBtn" class="clear-btn">🔄 Reset</button>
+            </div>
         </div>
     </div>
 

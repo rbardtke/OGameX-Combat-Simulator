@@ -22,6 +22,7 @@ Complete list of simulator features and technical details.
 - Weapons: 10% attack bonus per level
 - Shielding: 10% shield bonus per level
 - Armour: 10% hull bonus per level
+- Hyperspace Technology: 5% cargo capacity bonus per level
 - Drive technologies: See speed calculations below
 
 ## Flight Time Calculator
@@ -73,7 +74,7 @@ Time = max(
 **Plunder**:
 - Resources available: Configurable
 - Plunder percentage: 50%, 75%, or 100%
-- Cargo capacity calculation
+- Cargo capacity calculation (with Hyperspace Technology bonus)
 - Total plunder display
 
 **Profit/Loss**:

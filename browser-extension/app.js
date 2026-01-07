@@ -229,31 +229,35 @@ function calculatePlunder(defenderResources, attackerCargoCapacity, attackerWins
     };
 }
 
+// Base cargo capacities for each ship type
+const CARGO_CAPACITY = {
+    202: 5000,    // Small Cargo
+    203: 25000,   // Large Cargo
+    204: 50,      // Light Fighter
+    205: 100,     // Heavy Fighter
+    206: 800,     // Cruiser
+    207: 1500,    // Battleship
+    208: 7500,    // Colony Ship
+    209: 20000,   // Recycler
+    210: 5,       // Espionage Probe
+    211: 500,     // Bomber
+    213: 2000,    // Destroyer
+    214: 1000000, // Deathstar
+    215: 750,     // Battlecruiser
+    218: 10000,   // Reaper
+    219: 10000    // Pathfinder
+};
+
 // Calculate cargo capacity from surviving ships
-function calculateCargoCapacity(ships) {
-    // Cargo capacities for each ship type
-    const CARGO_CAPACITY = {
-        202: 5000,    // Small Cargo
-        203: 25000,   // Large Cargo
-        204: 50,      // Light Fighter
-        205: 100,     // Heavy Fighter
-        206: 800,     // Cruiser
-        207: 1500,    // Battleship
-        208: 7500,    // Colony Ship
-        209: 20000,   // Recycler
-        210: 5,       // Espionage Probe
-        211: 500,     // Bomber
-        213: 2000,    // Destroyer
-        214: 1000000, // Deathstar
-        215: 750,     // Battlecruiser
-        218: 10000,   // Reaper
-        219: 10000    // Pathfinder
-    };
+// Hyperspace Technology increases cargo capacity by 5% per level
+function calculateCargoCapacity(ships, hyperspaceTechLevel = 0) {
+    const cargoBonus = 1 + (hyperspaceTechLevel * 0.05); // 5% per level
 
     let totalCapacity = 0;
     for (const [unitId, unit] of Object.entries(ships)) {
-        const capacity = CARGO_CAPACITY[parseInt(unitId)] || 0;
-        totalCapacity += capacity * unit.amount;
+        const baseCapacity = CARGO_CAPACITY[parseInt(unitId)] || 0;
+        const adjustedCapacity = Math.floor(baseCapacity * cargoBonus);
+        totalCapacity += adjustedCapacity * unit.amount;
     }
     return totalCapacity;
 }
@@ -502,6 +506,18 @@ function displayDebrisInfo(lastRound, totalRounds) {
     document.getElementById('recyclersNeeded').textContent = recyclersNeeded.toLocaleString();
     document.getElementById('wreckfieldSection').style.display = 'block';
 
+    // Calculate Reaper debris collection (30% of debris)
+    const reaperCollection = calculateReaperDebrisCollection(
+        lastRound.attacker_ships,
+        lastRound.defender_ships,
+        totalDebris,
+        parseInt(document.getElementById('atkHyperspaceTech')?.value) || 0,
+        parseInt(document.getElementById('defHyperspaceTech')?.value) || 0
+    );
+
+    // Update Reaper collection section
+    displayReaperCollection(reaperCollection, totalDebris);
+
     // Determine if attacker won
     const attackerWins = Object.keys(lastRound.attacker_ships).length > 0 &&
                          Object.keys(lastRound.defender_ships).length === 0;
@@ -514,14 +530,38 @@ function displayDebrisInfo(lastRound, totalRounds) {
     };
 
     const plunderPercent = parseInt(document.getElementById('plunderPercent').value) || 50;
-    const attackerCargoCapacity = calculateCargoCapacity(lastRound.attacker_ships);
+    const hyperspaceTechLevel = parseInt(document.getElementById('atkHyperspaceTech')?.value) || 0;
+    const attackerCargoCapacity = calculateCargoCapacity(lastRound.attacker_ships, hyperspaceTechLevel);
     const plunder = calculatePlunder(defenderResources, attackerCargoCapacity, attackerWins, plunderPercent);
+
+    // Calculate how many cargos would be needed for full plunder
+    const plunderRatio = plunderPercent / 100;
+    const totalPlunderable = Math.floor(defenderResources.metal * plunderRatio) +
+                             Math.floor(defenderResources.crystal * plunderRatio) +
+                             Math.floor(defenderResources.deuterium * plunderRatio);
+
+    // Get cargo capacities with hyperspace tech bonus
+    const smallCargoCapacity = Math.floor(CARGO_CAPACITY[202] * (1 + hyperspaceTechLevel * 0.05));
+    const largeCargoCapacity = Math.floor(CARGO_CAPACITY[203] * (1 + hyperspaceTechLevel * 0.05));
+
+    const smallCargosNeeded = Math.ceil(totalPlunderable / smallCargoCapacity);
+    const largeCargosNeeded = Math.ceil(totalPlunderable / largeCargoCapacity);
+
+    // Calculate capture percentage
+    let capturePercent = 100;
+    if (totalPlunderable > 0) {
+        capturePercent = Math.min(100, (attackerCargoCapacity / totalPlunderable) * 100);
+    }
 
     // Update plunder section
     document.getElementById('plunderMetal').textContent = plunder.metal.toLocaleString();
     document.getElementById('plunderCrystal').textContent = plunder.crystal.toLocaleString();
     document.getElementById('plunderDeuterium').textContent = plunder.deuterium.toLocaleString();
     document.getElementById('plunderTotal').textContent = plunder.total.toLocaleString();
+    document.getElementById('cargoCapacity').textContent = attackerCargoCapacity.toLocaleString();
+    document.getElementById('capturePercent').textContent = capturePercent.toFixed(1) + '%';
+    document.getElementById('smallCargosNeeded').textContent = smallCargosNeeded.toLocaleString();
+    document.getElementById('largeCargosNeeded').textContent = largeCargosNeeded.toLocaleString();
     document.getElementById('plunderSection').style.display = 'block';
 
     // Calculate attacker losses value
@@ -1067,4 +1107,473 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Calculate flight time on initial load with default coordinates
     updateFlightTime();
+
+    // IPM Simulation event listeners
+    document.getElementById('ipmSimBtn').addEventListener('click', openIpmModal);
+    document.getElementById('ipmModalClose').addEventListener('click', closeIpmModal);
+    document.getElementById('ipmSimulateBtn').addEventListener('click', simulateIpmAttack);
+    document.getElementById('ipmApplyBtn').addEventListener('click', applyIpmResults);
+    document.getElementById('ipmResetBtn').addEventListener('click', resetIpmModal);
+
+    // Close modal when clicking outside
+    document.getElementById('ipmModal').addEventListener('click', function(e) {
+        if (e.target === this) closeIpmModal();
+    });
 });
+
+// ============================================
+// IPM Simulation Functions
+// ============================================
+
+// Defense structure values (hull/10 for armor calculation)
+const DEFENSE_STRUCTURES = {
+    401: { name: 'Rocket Launcher', structure: 2000, cost: { metal: 2000, crystal: 0 } },
+    402: { name: 'Light Laser', structure: 2000, cost: { metal: 1500, crystal: 500 } },
+    403: { name: 'Heavy Laser', structure: 8000, cost: { metal: 6000, crystal: 2000 } },
+    404: { name: 'Gauss Cannon', structure: 35000, cost: { metal: 20000, crystal: 15000 } },
+    405: { name: 'Ion Cannon', structure: 8000, cost: { metal: 2000, crystal: 6000 } },
+    406: { name: 'Plasma Turret', structure: 100000, cost: { metal: 50000, crystal: 50000 } },
+    407: { name: 'Small Shield Dome', structure: 20000, cost: { metal: 10000, crystal: 10000 } },
+    408: { name: 'Large Shield Dome', structure: 100000, cost: { metal: 50000, crystal: 50000 } }
+};
+
+// IPM base damage
+const IPM_BASE_DAMAGE = 12000;
+
+// Store last simulation results for applying
+let lastIpmResults = null;
+
+/**
+ * Open IPM simulation modal and copy defender's defense values
+ */
+function openIpmModal() {
+    // Copy current defense values from main form
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const mainInput = document.getElementById(`def-${unitId}`);
+        const ipmInput = document.getElementById(`ipm-def-${unitId}`);
+        if (mainInput && ipmInput) {
+            ipmInput.value = mainInput.value || 0;
+        }
+    }
+
+    // Display armor tech from defender (read-only)
+    const defArmour = parseInt(document.getElementById('defArmour')?.value) || 0;
+    document.getElementById('ipmArmourTechDisplay').textContent = defArmour;
+
+    // Display weapons tech from attacker (read-only)
+    const atkWeapons = parseInt(document.getElementById('atkWeapons')?.value) || 0;
+    document.getElementById('ipmWeaponsTechDisplay').textContent = atkWeapons;
+
+    // Clear previous results
+    document.getElementById('ipmResults').style.display = 'none';
+    document.getElementById('ipmApplyBtn').style.display = 'none';
+    clearIpmRemainingDisplays();
+
+    // Show modal
+    document.getElementById('ipmModal').style.display = 'flex';
+}
+
+/**
+ * Close IPM simulation modal
+ */
+function closeIpmModal() {
+    document.getElementById('ipmModal').style.display = 'none';
+}
+
+/**
+ * Reset IPM modal to initial state
+ */
+function resetIpmModal() {
+    // Reset inputs
+    document.getElementById('ipmCount').value = 10;
+    document.getElementById('ipmAbm').value = 0;
+    document.getElementById('ipmTarget').value = '0';
+
+    // Copy defense values again from main form
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const mainInput = document.getElementById(`def-${unitId}`);
+        const ipmInput = document.getElementById(`ipm-def-${unitId}`);
+        if (mainInput && ipmInput) {
+            ipmInput.value = mainInput.value || 0;
+        }
+    }
+
+    // Clear results
+    document.getElementById('ipmResults').style.display = 'none';
+    document.getElementById('ipmApplyBtn').style.display = 'none';
+    clearIpmRemainingDisplays();
+    lastIpmResults = null;
+}
+
+/**
+ * Clear IPM remaining displays
+ */
+function clearIpmRemainingDisplays() {
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const remaining = document.getElementById(`ipm-remaining-${unitId}`);
+        if (remaining) remaining.textContent = '';
+    }
+}
+
+/**
+ * Get defense sorted by targeting priority
+ */
+function getDefenseSortedByPriority(defenses, targetPriority) {
+    const defenseList = [];
+
+    for (const [unitId, count] of Object.entries(defenses)) {
+        if (count > 0) {
+            const def = DEFENSE_STRUCTURES[unitId];
+            if (def) {
+                defenseList.push({
+                    unitId: parseInt(unitId),
+                    count: count,
+                    name: def.name,
+                    structure: def.structure,
+                    cost: def.cost.metal + def.cost.crystal
+                });
+            }
+        }
+    }
+
+    // Sort based on priority
+    if (targetPriority === 0) {
+        // Cheapest first
+        defenseList.sort((a, b) => a.cost - b.cost);
+    } else if (targetPriority === 1) {
+        // Most expensive first
+        defenseList.sort((a, b) => b.cost - a.cost);
+    } else {
+        // Specific target first, then cheapest
+        defenseList.sort((a, b) => {
+            if (a.unitId === targetPriority) return -1;
+            if (b.unitId === targetPriority) return 1;
+            return a.cost - b.cost;
+        });
+    }
+
+    return defenseList;
+}
+
+/**
+ * Simulate IPM attack
+ */
+function simulateIpmAttack() {
+    // Get attack parameters
+    const missileCount = parseInt(document.getElementById('ipmCount').value) || 0;
+    const weaponsTech = parseInt(document.getElementById('atkWeapons')?.value) || 0;
+    const targetPriority = parseInt(document.getElementById('ipmTarget').value);
+
+    // Get defense parameters
+    const abmCount = parseInt(document.getElementById('ipmAbm').value) || 0;
+    const armourTech = parseInt(document.getElementById('defArmour')?.value) || 0;
+
+    // Get current defense counts
+    const defenses = {};
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const input = document.getElementById(`ipm-def-${unitId}`);
+        defenses[unitId] = parseInt(input?.value) || 0;
+    }
+
+    // Calculate interception
+    const missilesIntercepted = Math.min(missileCount, abmCount);
+    const missilesHit = missileCount - missilesIntercepted;
+
+    // Calculate total damage
+    // Formula: missiles × 12,000 × (1 + 0.1 × weapons_tech)
+    const totalDamage = missilesHit * IPM_BASE_DAMAGE * (1 + 0.1 * weaponsTech);
+
+    // Sort defenses by priority
+    const sortedDefenses = getDefenseSortedByPriority(defenses, targetPriority);
+
+    // Apply damage to defenses
+    let remainingDamage = totalDamage;
+    const destroyed = {};
+    const remaining = { ...defenses };
+
+    for (const defense of sortedDefenses) {
+        if (remainingDamage <= 0) break;
+        if (remaining[defense.unitId] <= 0) continue;
+
+        // Calculate armor: structure × (1 + 0.1 × armor_tech) / 10
+        const armor = defense.structure * (1 + 0.1 * armourTech) / 10;
+
+        // Calculate how many can be destroyed
+        const maxDestroyable = Math.floor(remainingDamage / armor);
+        const actualDestroyed = Math.min(maxDestroyable, remaining[defense.unitId]);
+
+        if (actualDestroyed > 0) {
+            destroyed[defense.unitId] = actualDestroyed;
+            remaining[defense.unitId] -= actualDestroyed;
+            remainingDamage -= actualDestroyed * armor;
+        }
+    }
+
+    const damageUsed = totalDamage - remainingDamage;
+
+    // Store results for applying later
+    lastIpmResults = {
+        remaining: remaining,
+        destroyed: destroyed,
+        abmUsed: missilesIntercepted
+    };
+
+    // Display results
+    displayIpmResults({
+        missilesSent: missileCount,
+        missilesIntercepted: missilesIntercepted,
+        missilesHit: missilesHit,
+        totalDamage: totalDamage,
+        damageUsed: damageUsed,
+        destroyed: destroyed,
+        remaining: remaining,
+        defenses: defenses
+    });
+}
+
+/**
+ * Display IPM simulation results
+ */
+function displayIpmResults(results) {
+    // Update summary stats
+    document.getElementById('ipmMissilesSent').textContent = results.missilesSent.toLocaleString();
+    document.getElementById('ipmMissilesIntercepted').textContent = results.missilesIntercepted.toLocaleString();
+    document.getElementById('ipmMissilesHit').textContent = results.missilesHit.toLocaleString();
+    document.getElementById('ipmTotalDamage').textContent = Math.floor(results.totalDamage).toLocaleString();
+    document.getElementById('ipmDamageUsed').textContent = Math.floor(results.damageUsed).toLocaleString();
+
+    // Update remaining displays
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const remainingEl = document.getElementById(`ipm-remaining-${unitId}`);
+        if (remainingEl) {
+            const before = results.defenses[unitId] || 0;
+            const after = results.remaining[unitId] || 0;
+            const lost = before - after;
+
+            if (before > 0) {
+                if (lost > 0) {
+                    remainingEl.textContent = `→ ${after.toLocaleString()} (-${lost.toLocaleString()})`;
+                    remainingEl.style.color = '#fca5a5';
+                } else {
+                    remainingEl.textContent = `→ ${after.toLocaleString()}`;
+                    remainingEl.style.color = '#4ade80';
+                }
+            } else {
+                remainingEl.textContent = '';
+            }
+        }
+    }
+
+    // Build destroyed list
+    const destroyedList = document.getElementById('ipmDestroyedList');
+    let html = '<h4>Destroyed Units:</h4>';
+
+    let hasDestroyed = false;
+    for (const [unitId, count] of Object.entries(results.destroyed)) {
+        if (count > 0) {
+            hasDestroyed = true;
+            const name = DEFENSE_STRUCTURES[unitId]?.name || `Defense ${unitId}`;
+            html += `<div class="ipm-destroyed-item">-${count.toLocaleString()} ${name}</div>`;
+        }
+    }
+
+    if (!hasDestroyed) {
+        html += '<div class="ipm-destroyed-item">No units destroyed</div>';
+    }
+
+    destroyedList.innerHTML = html;
+
+    // Show results section and apply button
+    document.getElementById('ipmResults').style.display = 'block';
+    document.getElementById('ipmApplyBtn').style.display = 'inline-block';
+}
+
+/**
+ * Apply IPM results to defender's defense in main form
+ */
+function applyIpmResults() {
+    if (!lastIpmResults) return;
+
+    // Update main form defense values
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const mainInput = document.getElementById(`def-${unitId}`);
+        if (mainInput) {
+            mainInput.value = lastIpmResults.remaining[unitId] || 0;
+        }
+    }
+
+    // Close modal
+    closeIpmModal();
+}
+
+// ============================================
+// Reaper Debris Collection Functions
+// ============================================
+
+const REAPER_UNIT_ID = 218;
+const REAPER_COLLECTION_PERCENT = 0.30; // 30% of debris
+
+/**
+ * Calculate Reaper debris collection for both attacker and defender
+ * Reapers collect 30% of debris, limited by their cargo capacity
+ * Attacker collects first, defender collects from remaining
+ */
+function calculateReaperDebrisCollection(attackerShips, defenderShips, totalDebris, atkHyperspaceTech, defHyperspaceTech) {
+    const result = {
+        attacker: null,
+        defender: null,
+        remainingDebris: { ...totalDebris }
+    };
+
+    // Get surviving Reaper counts
+    const atkReaperCount = attackerShips[REAPER_UNIT_ID]?.amount || 0;
+    const defReaperCount = defenderShips[REAPER_UNIT_ID]?.amount || 0;
+
+    // Attacker Reapers collect first
+    if (atkReaperCount > 0) {
+        const atkCargoBonus = 1 + (atkHyperspaceTech * 0.05);
+        const atkReaperCapacity = Math.floor(CARGO_CAPACITY[REAPER_UNIT_ID] * atkCargoBonus) * atkReaperCount;
+
+        result.attacker = collectDebris(result.remainingDebris, atkReaperCapacity, atkReaperCount, atkReaperCapacity);
+
+        // Reduce remaining debris
+        result.remainingDebris.metal -= result.attacker.metal;
+        result.remainingDebris.crystal -= result.attacker.crystal;
+        result.remainingDebris.deuterium -= result.attacker.deuterium;
+        result.remainingDebris.total -= result.attacker.total;
+    }
+
+    // Defender Reapers collect from remaining
+    if (defReaperCount > 0) {
+        const defCargoBonus = 1 + (defHyperspaceTech * 0.05);
+        const defReaperCapacity = Math.floor(CARGO_CAPACITY[REAPER_UNIT_ID] * defCargoBonus) * defReaperCount;
+
+        result.defender = collectDebris(result.remainingDebris, defReaperCapacity, defReaperCount, defReaperCapacity);
+
+        // Reduce remaining debris
+        result.remainingDebris.metal -= result.defender.metal;
+        result.remainingDebris.crystal -= result.defender.crystal;
+        result.remainingDebris.deuterium -= result.defender.deuterium;
+        result.remainingDebris.total -= result.defender.total;
+    }
+
+    return result;
+}
+
+/**
+ * Collect debris based on 30% limit and cargo capacity
+ * Returns the actual collected amounts
+ */
+function collectDebris(debris, cargoCapacity, reaperCount, totalCapacity) {
+    // Calculate 30% of debris that can be collected
+    const maxMetal = Math.floor(debris.metal * REAPER_COLLECTION_PERCENT);
+    const maxCrystal = Math.floor(debris.crystal * REAPER_COLLECTION_PERCENT);
+    const maxDeuterium = Math.floor(debris.deuterium * REAPER_COLLECTION_PERCENT);
+    const maxTotal = maxMetal + maxCrystal + maxDeuterium;
+
+    let collectedMetal, collectedCrystal, collectedDeuterium;
+
+    if (maxTotal <= cargoCapacity) {
+        // Can collect all 30%
+        collectedMetal = maxMetal;
+        collectedCrystal = maxCrystal;
+        collectedDeuterium = maxDeuterium;
+    } else {
+        // Distribute limited capacity fairly among resource types
+        const distribution = distributeLoot(maxMetal, maxCrystal, maxDeuterium, cargoCapacity);
+        collectedMetal = distribution.metal;
+        collectedCrystal = distribution.crystal;
+        collectedDeuterium = distribution.deuterium;
+    }
+
+    return {
+        reaperCount: reaperCount,
+        capacity: totalCapacity,
+        metal: collectedMetal,
+        crystal: collectedCrystal,
+        deuterium: collectedDeuterium,
+        total: collectedMetal + collectedCrystal + collectedDeuterium
+    };
+}
+
+/**
+ * Distribute limited cargo capacity fairly among resources
+ * Mimics OGameX LootService::distributeLoot
+ */
+function distributeLoot(metal, crystal, deuterium, capacity) {
+    const resources = [
+        { type: 'metal', amount: metal },
+        { type: 'crystal', amount: crystal },
+        { type: 'deuterium', amount: deuterium }
+    ];
+
+    const result = { metal: 0, crystal: 0, deuterium: 0 };
+    let remainingCapacity = capacity;
+
+    // First pass: give each resource up to 1/3 of capacity
+    const perResource = Math.floor(capacity / 3);
+    for (const res of resources) {
+        const allocated = Math.min(res.amount, perResource);
+        result[res.type] = allocated;
+        remainingCapacity -= allocated;
+    }
+
+    // Second pass: distribute remaining capacity to resources that need more
+    for (const res of resources) {
+        if (remainingCapacity <= 0) break;
+        const canTakeMore = res.amount - result[res.type];
+        if (canTakeMore > 0) {
+            const additional = Math.min(canTakeMore, remainingCapacity);
+            result[res.type] += additional;
+            remainingCapacity -= additional;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Display Reaper collection results in the UI
+ */
+function displayReaperCollection(reaperCollection, totalDebris) {
+    const reaperSection = document.getElementById('reaperSection');
+    const attackerSection = document.getElementById('attackerReaperCollection');
+    const defenderSection = document.getElementById('defenderReaperCollection');
+
+    // Hide all sections initially
+    reaperSection.style.display = 'none';
+    attackerSection.style.display = 'none';
+    defenderSection.style.display = 'none';
+
+    const hasAttackerReapers = reaperCollection.attacker !== null;
+    const hasDefenderReapers = reaperCollection.defender !== null;
+
+    if (!hasAttackerReapers && !hasDefenderReapers) {
+        return; // No Reapers, don't show section
+    }
+
+    reaperSection.style.display = 'block';
+
+    if (hasAttackerReapers) {
+        attackerSection.style.display = 'block';
+        document.getElementById('atkReaperCount').textContent = reaperCollection.attacker.reaperCount.toLocaleString();
+        document.getElementById('atkReaperCapacity').textContent = reaperCollection.attacker.capacity.toLocaleString();
+        document.getElementById('atkReaperMetal').textContent = reaperCollection.attacker.metal.toLocaleString();
+        document.getElementById('atkReaperCrystal').textContent = reaperCollection.attacker.crystal.toLocaleString();
+        document.getElementById('atkReaperDeuterium').textContent = reaperCollection.attacker.deuterium.toLocaleString();
+        document.getElementById('atkReaperTotal').textContent = reaperCollection.attacker.total.toLocaleString();
+    }
+
+    if (hasDefenderReapers) {
+        defenderSection.style.display = 'block';
+        document.getElementById('defReaperCount').textContent = reaperCollection.defender.reaperCount.toLocaleString();
+        document.getElementById('defReaperCapacity').textContent = reaperCollection.defender.capacity.toLocaleString();
+        document.getElementById('defReaperMetal').textContent = reaperCollection.defender.metal.toLocaleString();
+        document.getElementById('defReaperCrystal').textContent = reaperCollection.defender.crystal.toLocaleString();
+        document.getElementById('defReaperDeuterium').textContent = reaperCollection.defender.deuterium.toLocaleString();
+        document.getElementById('defReaperTotal').textContent = reaperCollection.defender.total.toLocaleString();
+    }
+
+    // Update remaining debris
+    document.getElementById('remainingDebris').textContent = reaperCollection.remainingDebris.total.toLocaleString();
+}
