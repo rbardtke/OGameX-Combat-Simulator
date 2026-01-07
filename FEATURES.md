@@ -11,6 +11,8 @@ Complete list of simulator features and technical details.
 - ✅ Rapidfire system
 - ✅ Maximum 6 rounds per battle
 - ✅ ~200x faster than PHP implementation
+- ✅ IPM simulation
+
 
 **Multiple Simulations**:
 - Run 1-100 simulations per battle (default: 5)
