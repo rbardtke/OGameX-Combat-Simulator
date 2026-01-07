@@ -12,6 +12,7 @@ Complete list of simulator features and technical details.
 - ✅ Maximum 6 rounds per battle
 - ✅ ~200x faster than PHP implementation
 - ✅ IPM simulation
+- ✅ Reaper debris support
 
 
 **Multiple Simulations**:

@@ -92,7 +92,6 @@ cd python-simulator && python3 combat_simulator.py
 Planned features (not yet implemented):
 
 - [ ] Alliance Combat System (ACS) support
-- [ ] IPM simulation
 - [ ] Multiple waves support
 - [ ] API Key integration (OGameX)
 - [ ] Tactical retreat
