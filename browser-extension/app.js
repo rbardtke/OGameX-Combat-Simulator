@@ -99,6 +99,24 @@ async function initWasm() {
     }
 }
 
+// Character class constants
+const CHARACTER_CLASSES = {
+    NONE: 0,
+    COLLECTOR: 1,
+    GENERAL: 2,
+    DISCOVERER: 3
+};
+
+// General class bonus: +2 combat research levels (weapons, shields, armor)
+const GENERAL_COMBAT_BONUS = 2;
+
+// Get selected character class for a side
+function getCharacterClass(side) {
+    const radioName = side === 'attacker' ? 'atkClass' : 'defClass';
+    const selected = document.querySelector(`input[name="${radioName}"]:checked`);
+    return selected ? parseInt(selected.value) : CHARACTER_CLASSES.NONE;
+}
+
 // Apply technology multipliers (10% per level)
 function applyTechMultipliers(baseValue, techLevel) {
     return baseValue * (1 + (techLevel * 0.1));
@@ -110,9 +128,17 @@ function collectUnits(side) {
     const prefix = side === 'attacker' ? 'atk' : 'def';
 
     // Get technology levels
-    const weaponsTech = parseInt(document.getElementById(`${prefix}Weapons`).value) || 0;
-    const shieldingTech = parseInt(document.getElementById(`${prefix}Shielding`).value) || 0;
-    const armourTech = parseInt(document.getElementById(`${prefix}Armour`).value) || 0;
+    let weaponsTech = parseInt(document.getElementById(`${prefix}Weapons`).value) || 0;
+    let shieldingTech = parseInt(document.getElementById(`${prefix}Shielding`).value) || 0;
+    let armourTech = parseInt(document.getElementById(`${prefix}Armour`).value) || 0;
+
+    // Apply General class bonus: +2 to combat research levels
+    const characterClass = getCharacterClass(side);
+    if (characterClass === CHARACTER_CLASSES.GENERAL) {
+        weaponsTech += GENERAL_COMBAT_BONUS;
+        shieldingTech += GENERAL_COMBAT_BONUS;
+        armourTech += GENERAL_COMBAT_BONUS;
+    }
 
     // Collect all unit inputs
     const inputs = document.querySelectorAll(`.${side}-panel .unit-input`);
@@ -822,6 +848,12 @@ function clearAll() {
     document.querySelectorAll('input[type="number"]:not(#debrisShipPercent):not(#debrisDefensePercent):not(.coord-input):not(#fleetSpeedPercent)').forEach(input => {
         input.value = 0;
     });
+
+    // Reset character class selections to "None"
+    const atkNone = document.querySelector('input[name="atkClass"][value="0"]');
+    const defNone = document.querySelector('input[name="defClass"][value="0"]');
+    if (atkNone) atkNone.checked = true;
+    if (defNone) defNone.checked = true;
 
     // Reset debris settings to defaults
     document.getElementById('debrisShipPercent').value = 30;
@@ -1618,6 +1650,10 @@ function collectShareData() {
         ft: {}  // Flight time settings
     };
 
+    // Attacker character class (only non-zero)
+    const atkClass = getCharacterClass('attacker');
+    if (atkClass > 0) data.atk.cl = atkClass;
+
     // Attacker technologies (only non-zero)
     const atkTechs = {
         w: parseInt(document.getElementById('atkWeapons').value) || 0,
@@ -1640,6 +1676,10 @@ function collectShareData() {
             if (amount > 0) data.atk.u[unitId] = amount;
         }
     }
+
+    // Defender character class (only non-zero)
+    const defClass = getCharacterClass('defender');
+    if (defClass > 0) data.def.cl = defClass;
 
     // Defender technologies (only non-zero)
     const defTechs = {
@@ -1981,6 +2021,12 @@ function applyShareData(data) {
     // Clear all inputs first
     clearAll();
 
+    // Apply attacker character class
+    if (data.atk?.cl) {
+        const radio = document.querySelector(`input[name="atkClass"][value="${data.atk.cl}"]`);
+        if (radio) radio.checked = true;
+    }
+
     // Apply attacker technologies
     if (data.atk?.t) {
         if (data.atk.t.w) document.getElementById('atkWeapons').value = data.atk.t.w;
@@ -2001,6 +2047,12 @@ function applyShareData(data) {
             const input = document.getElementById(`atk-${unitId}`);
             if (input) input.value = amount;
         }
+    }
+
+    // Apply defender character class
+    if (data.def?.cl) {
+        const radio = document.querySelector(`input[name="defClass"][value="${data.def.cl}"]`);
+        if (radio) radio.checked = true;
     }
 
     // Apply defender technologies

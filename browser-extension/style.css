@@ -60,6 +60,73 @@ h1 {
     border-bottom: 2px solid rgba(255, 215, 0, 0.3);
 }
 
+/* Character Class Selector */
+.class-section {
+    margin-bottom: 20px;
+}
+
+.class-section h3 {
+    font-size: 1.1rem;
+    color: #ffd700;
+    margin-bottom: 10px;
+}
+
+.class-selector {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.class-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.2);
+    border: 2px solid transparent;
+    transition: all 0.2s ease;
+    flex: 1;
+    min-width: 60px;
+}
+
+.class-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 215, 0, 0.3);
+}
+
+.class-option input[type="radio"] {
+    display: none;
+}
+
+.class-option input[type="radio"]:checked + img {
+    filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.8));
+}
+
+.class-option:has(input[type="radio"]:checked) {
+    border-color: #ffd700;
+    background: rgba(255, 215, 0, 0.1);
+}
+
+.class-option img {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    margin-bottom: 4px;
+    transition: filter 0.2s ease;
+}
+
+.class-option span {
+    font-size: 0.75rem;
+    color: #60a5fa;
+    text-align: center;
+}
+
+.class-option:has(input[type="radio"]:checked) span {
+    color: #ffd700;
+}
+
 .tech-section {
     margin-bottom: 20px;
 }

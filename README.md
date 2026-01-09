@@ -97,7 +97,7 @@ Planned features (not yet implemented):
 - [ ] Tactical retreat
 - [x] Share function (battle setup sharing with compressed codes)
 - [ ] Geologist support
-- [ ] Character classes (Collector, General, Discoverer)
+- [x] Character classes (Collector, General, Discoverer) - General provides +2 combat tech bonus
 
 ## Based On
 

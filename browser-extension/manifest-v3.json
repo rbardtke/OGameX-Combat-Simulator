@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "OGameX Combat Simulator",
-  "version": "1.1.0",
+  "version": "1.3.0",
   "description": "Fast OGame combat simulator powered by Rust and WebAssembly",
   "icons": {
     "16": "icon16.png",
