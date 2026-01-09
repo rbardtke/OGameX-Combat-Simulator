@@ -78,33 +78,21 @@ const DRIVE_BONUSES = {
 let wasmModule = null;
 let wasmReady = false;
 
-// Load WASM without ES6 modules
+// Store last simulation result for sharing
+let lastBattleResult = null;
+
+// Load WASM using dynamic import for ES6 module format (--target web)
 async function initWasm() {
     try {
-        const script = document.createElement('script');
-        script.src = 'pkg/ogame_combat_wasm.js';
+        // Dynamic import for ES6 module format
+        const wasm = await import('./pkg/ogame_combat_wasm.js');
 
-        script.onload = async function() {
-            try {
-                if (typeof wasm_bindgen === 'undefined') {
-                    throw new Error('wasm_bindgen not found');
-                }
+        // Initialize the WASM module
+        await wasm.default('pkg/ogame_combat_wasm_bg.wasm');
 
-                await wasm_bindgen('pkg/ogame_combat_wasm_bg.wasm');
-                wasmModule = wasm_bindgen;
-                wasmReady = true;
-                console.log('WASM module loaded successfully');
-            } catch (error) {
-                console.error('Failed to initialize WASM:', error);
-                showError('Failed to initialize combat simulator: ' + error.message);
-            }
-        };
-
-        script.onerror = function() {
-            showError('Failed to load WASM files. Make sure pkg/ folder exists with built WASM files.');
-        };
-
-        document.head.appendChild(script);
+        wasmModule = wasm;
+        wasmReady = true;
+        console.log('WASM module loaded successfully');
     } catch (error) {
         console.error('Failed to load WASM module:', error);
         showError('Failed to initialize combat simulator. Error: ' + error.message);
@@ -356,15 +344,24 @@ function displayResults(output, numRuns = 1) {
         let html = '<div class="round">';
         html += `<h3>Round ${index + 1}</h3>`;
 
-        // Add combat statistics
-        html += `<div class="combat-stats">`;
-        html += `<div class="combat-stat-row">`;
-        html += `<span>The Attacker fires a total of <strong>${round.hits_attacker.toLocaleString()}</strong> shots with a total strength of <strong>${Math.floor(round.full_strength_attacker).toLocaleString()}</strong>. The defender's shields absorb <strong>${Math.floor(round.absorbed_damage_defender).toLocaleString()}</strong> points of damage.</span>`;
-        html += `</div>`;
-        html += `<div class="combat-stat-row">`;
-        html += `<span>The Defender fires a total of <strong>${round.hits_defender.toLocaleString()}</strong> shots with a total strength of <strong>${Math.floor(round.full_strength_defender).toLocaleString()}</strong>. The attacker's shields absorb <strong>${Math.floor(round.absorbed_damage_attacker).toLocaleString()}</strong> points of damage.</span>`;
-        html += `</div>`;
-        html += `</div>`;
+        // Add combat statistics (only if available - imported battles may not have these)
+        const hasCombatStats = round.hits_attacker > 0 || round.hits_defender > 0;
+        if (hasCombatStats) {
+            html += `<div class="combat-stats">`;
+            html += `<div class="combat-stat-row">`;
+            html += `<span>The Attacker fires a total of <strong>${round.hits_attacker.toLocaleString()}</strong> shots with a total strength of <strong>${Math.floor(round.full_strength_attacker).toLocaleString()}</strong>. The defender's shields absorb <strong>${Math.floor(round.absorbed_damage_defender).toLocaleString()}</strong> points of damage.</span>`;
+            html += `</div>`;
+            html += `<div class="combat-stat-row">`;
+            html += `<span>The Defender fires a total of <strong>${round.hits_defender.toLocaleString()}</strong> shots with a total strength of <strong>${Math.floor(round.full_strength_defender).toLocaleString()}</strong>. The attacker's shields absorb <strong>${Math.floor(round.absorbed_damage_attacker).toLocaleString()}</strong> points of damage.</span>`;
+            html += `</div>`;
+            html += `</div>`;
+        } else {
+            html += `<div class="combat-stats">`;
+            html += `<div class="combat-stat-row" style="font-style: italic; opacity: 0.7;">`;
+            html += `<span>📥 Imported battle result - detailed combat statistics not available</span>`;
+            html += `</div>`;
+            html += `</div>`;
+        }
 
         html += `<div class="round-stats">`;
 
@@ -766,6 +763,12 @@ async function simulateBattle() {
         // Average the results
         const averagedResult = averageSimulationResults(allResults);
 
+        // Store result for sharing
+        lastBattleResult = {
+            result: averagedResult,
+            runs: simulationRuns
+        };
+
         // Hide loading and show results
         hideLoading();
         displayResults(JSON.stringify(averagedResult), simulationRuns);
@@ -847,6 +850,9 @@ function clearAll() {
     document.getElementById('plunderSection').style.display = 'none';
     document.getElementById('wreckfieldSection').style.display = 'none';
     document.getElementById('profitSection').style.display = 'none';
+
+    // Clear stored battle result
+    lastBattleResult = null;
 }
 
 // ============================================
@@ -1119,6 +1125,20 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('ipmModal').addEventListener('click', function(e) {
         if (e.target === this) closeIpmModal();
     });
+
+    // Share functionality event listeners
+    document.getElementById('generateShareBtn').addEventListener('click', generateShareCode);
+    document.getElementById('importShareBtn').addEventListener('click', importShareCode);
+    document.getElementById('copyShareBtn').addEventListener('click', copyShareCode);
+
+    // Make share input editable when clicking on it
+    document.getElementById('shareCode').addEventListener('click', function() {
+        this.readOnly = false;
+        this.select();
+    });
+
+    // Check URL for share code on load
+    checkUrlForShareCode();
 });
 
 // ============================================
@@ -1576,4 +1596,634 @@ function displayReaperCollection(reaperCollection, totalDebris) {
 
     // Update remaining debris
     document.getElementById('remainingDebris').textContent = reaperCollection.remainingDebris.total.toLocaleString();
+}
+
+// ============================================
+// Share Functions (Versioned Schema)
+// ============================================
+
+// Current share schema version - increment when structure changes
+const SHARE_SCHEMA_VERSION = 1;
+
+/**
+ * Collect all form data into a shareable object
+ * Only includes non-zero/non-default values for compact encoding
+ */
+function collectShareData() {
+    const data = {
+        v: SHARE_SCHEMA_VERSION,
+        atk: { t: {}, u: {} },
+        def: { t: {}, u: {}, r: {} },
+        s: {},
+        ft: {}  // Flight time settings
+    };
+
+    // Attacker technologies (only non-zero)
+    const atkTechs = {
+        w: parseInt(document.getElementById('atkWeapons').value) || 0,
+        s: parseInt(document.getElementById('atkShielding').value) || 0,
+        a: parseInt(document.getElementById('atkArmour').value) || 0,
+        c: parseInt(document.getElementById('atkCombustion').value) || 0,
+        i: parseInt(document.getElementById('atkImpulse').value) || 0,
+        h: parseInt(document.getElementById('atkHyperspace').value) || 0,
+        ht: parseInt(document.getElementById('atkHyperspaceTech')?.value) || 0
+    };
+    for (const [key, val] of Object.entries(atkTechs)) {
+        if (val > 0) data.atk.t[key] = val;
+    }
+
+    // Attacker units (only non-zero)
+    for (let unitId = 202; unitId <= 219; unitId++) {
+        const input = document.getElementById(`atk-${unitId}`);
+        if (input) {
+            const amount = parseInt(input.value) || 0;
+            if (amount > 0) data.atk.u[unitId] = amount;
+        }
+    }
+
+    // Defender technologies (only non-zero)
+    const defTechs = {
+        w: parseInt(document.getElementById('defWeapons').value) || 0,
+        s: parseInt(document.getElementById('defShielding').value) || 0,
+        a: parseInt(document.getElementById('defArmour').value) || 0,
+        c: parseInt(document.getElementById('defCombustion').value) || 0,
+        i: parseInt(document.getElementById('defImpulse').value) || 0,
+        h: parseInt(document.getElementById('defHyperspace').value) || 0,
+        ht: parseInt(document.getElementById('defHyperspaceTech')?.value) || 0
+    };
+    for (const [key, val] of Object.entries(defTechs)) {
+        if (val > 0) data.def.t[key] = val;
+    }
+
+    // Defender units - ships (only non-zero)
+    for (let unitId = 202; unitId <= 219; unitId++) {
+        const input = document.getElementById(`def-${unitId}`);
+        if (input) {
+            const amount = parseInt(input.value) || 0;
+            if (amount > 0) data.def.u[unitId] = amount;
+        }
+    }
+
+    // Defender units - defense (only non-zero)
+    for (let unitId = 401; unitId <= 408; unitId++) {
+        const input = document.getElementById(`def-${unitId}`);
+        if (input) {
+            const amount = parseInt(input.value) || 0;
+            if (amount > 0) data.def.u[unitId] = amount;
+        }
+    }
+
+    // Defender resources (only non-zero)
+    const defResources = {
+        m: parseInt(document.getElementById('defenderMetal')?.value) || 0,
+        c: parseInt(document.getElementById('defenderCrystal')?.value) || 0,
+        d: parseInt(document.getElementById('defenderDeuterium')?.value) || 0
+    };
+    for (const [key, val] of Object.entries(defResources)) {
+        if (val > 0) data.def.r[key] = val;
+    }
+
+    // Simulation settings (only non-default)
+    const runs = parseInt(document.getElementById('simulationRuns')?.value) || 5;
+    if (runs !== 5) data.s.n = runs;
+
+    const plunderPercent = parseInt(document.getElementById('plunderPercent')?.value) || 50;
+    if (plunderPercent !== 50) data.s.p = plunderPercent;
+
+    const debrisShip = parseInt(document.getElementById('debrisShipPercent')?.value) || 30;
+    if (debrisShip !== 30) data.s.ds = debrisShip;
+
+    const debrisDef = parseInt(document.getElementById('debrisDefensePercent')?.value) || 0;
+    if (debrisDef !== 0) data.s.dd = debrisDef;
+
+    const debrisDeutEnabled = document.getElementById('debrisDeuteriumEnabled')?.checked || false;
+    if (debrisDeutEnabled) data.s.de = 1;
+
+    // Flight time coordinates (only non-default)
+    const ftSettings = {
+        og: parseInt(document.getElementById('originGalaxy')?.value) || 1,
+        os: parseInt(document.getElementById('originSystem')?.value) || 1,
+        op: parseInt(document.getElementById('originPlanet')?.value) || 1,
+        tg: parseInt(document.getElementById('targetGalaxy')?.value) || 1,
+        ts: parseInt(document.getElementById('targetSystem')?.value) || 100,
+        tp: parseInt(document.getElementById('targetPlanet')?.value) || 1,
+        sp: parseInt(document.getElementById('fleetSpeedPercent')?.value) || 100
+    };
+    // Only include if different from defaults
+    if (ftSettings.og !== 1) data.ft.og = ftSettings.og;
+    if (ftSettings.os !== 1) data.ft.os = ftSettings.os;
+    if (ftSettings.op !== 1) data.ft.op = ftSettings.op;
+    if (ftSettings.tg !== 1) data.ft.tg = ftSettings.tg;
+    if (ftSettings.ts !== 100) data.ft.ts = ftSettings.ts;
+    if (ftSettings.tp !== 1) data.ft.tp = ftSettings.tp;
+    if (ftSettings.sp !== 100) data.ft.sp = ftSettings.sp;
+
+    // Universe fleet speed settings (only non-default)
+    const universeSettings = {
+        fsw: parseFloat(document.getElementById('fleetSpeedWar')?.value) || 1,
+        fsh: parseFloat(document.getElementById('fleetSpeedHolding')?.value) || 1,
+        fsp: parseFloat(document.getElementById('fleetSpeedPeaceful')?.value) || 1
+    };
+    if (universeSettings.fsw !== 1) data.ft.fsw = universeSettings.fsw;
+    if (universeSettings.fsh !== 1) data.ft.fsh = universeSettings.fsh;
+    if (universeSettings.fsp !== 1) data.ft.fsp = universeSettings.fsp;
+
+    // Include battle results if available
+    if (lastBattleResult) {
+        data.br = compressBattleResult(lastBattleResult);
+    }
+
+    // Clean up empty objects
+    if (Object.keys(data.atk.t).length === 0) delete data.atk.t;
+    if (Object.keys(data.atk.u).length === 0) delete data.atk.u;
+    if (Object.keys(data.atk).length === 0) delete data.atk;
+    if (Object.keys(data.def.t).length === 0) delete data.def.t;
+    if (Object.keys(data.def.u).length === 0) delete data.def.u;
+    if (Object.keys(data.def.r).length === 0) delete data.def.r;
+    if (Object.keys(data.def).length === 0) delete data.def;
+    if (Object.keys(data.s).length === 0) delete data.s;
+    if (Object.keys(data.ft).length === 0) delete data.ft;
+
+    return data;
+}
+
+/**
+ * Compress battle result to minimal format for sharing
+ * Includes all rounds with combat statistics
+ */
+function compressBattleResult(battleData) {
+    const result = battleData.result;
+
+    const compressed = {
+        n: battleData.runs,  // number of simulation runs
+        w: result.winner,  // winner: "attacker", "defender", or "draw"
+        rds: []  // rounds array
+    };
+
+    // Compress each round
+    for (const round of result.rounds) {
+        const compressedRound = {
+            // Combat statistics (abbreviated keys)
+            ha: round.hits_attacker,  // hits attacker
+            hd: round.hits_defender,  // hits defender
+            sa: Math.floor(round.full_strength_attacker),  // strength attacker
+            sd: Math.floor(round.full_strength_defender),  // strength defender
+            aa: Math.floor(round.absorbed_damage_attacker),  // absorbed attacker
+            ad: Math.floor(round.absorbed_damage_defender),  // absorbed defender
+        };
+
+        // Attacker ships (only non-zero)
+        compressedRound.as = {};
+        for (const [unitId, unit] of Object.entries(round.attacker_ships)) {
+            if (unit.amount > 0) {
+                compressedRound.as[unitId] = unit.amount;
+            }
+        }
+
+        // Defender ships (only non-zero)
+        compressedRound.ds = {};
+        for (const [unitId, unit] of Object.entries(round.defender_ships)) {
+            if (unit.amount > 0) {
+                compressedRound.ds[unitId] = unit.amount;
+            }
+        }
+
+        // Attacker losses in round (only non-zero)
+        compressedRound.alr = {};
+        if (round.attacker_losses_in_round) {
+            for (const [unitId, unit] of Object.entries(round.attacker_losses_in_round)) {
+                if (unit.amount > 0) {
+                    compressedRound.alr[unitId] = unit.amount;
+                }
+            }
+        }
+
+        // Defender losses in round (only non-zero)
+        compressedRound.dlr = {};
+        if (round.defender_losses_in_round) {
+            for (const [unitId, unit] of Object.entries(round.defender_losses_in_round)) {
+                if (unit.amount > 0) {
+                    compressedRound.dlr[unitId] = unit.amount;
+                }
+            }
+        }
+
+        // Clean up empty objects
+        if (Object.keys(compressedRound.as).length === 0) delete compressedRound.as;
+        if (Object.keys(compressedRound.ds).length === 0) delete compressedRound.ds;
+        if (Object.keys(compressedRound.alr).length === 0) delete compressedRound.alr;
+        if (Object.keys(compressedRound.dlr).length === 0) delete compressedRound.dlr;
+
+        compressed.rds.push(compressedRound);
+    }
+
+    // Also store total losses from last round for backward compatibility
+    const lastRound = result.rounds[result.rounds.length - 1];
+    compressed.al = {};
+    for (const [unitId, loss] of Object.entries(lastRound.attacker_losses)) {
+        if (loss.amount > 0) {
+            compressed.al[unitId] = loss.amount;
+        }
+    }
+    compressed.dl = {};
+    for (const [unitId, loss] of Object.entries(lastRound.defender_losses)) {
+        if (loss.amount > 0) {
+            compressed.dl[unitId] = loss.amount;
+        }
+    }
+
+    if (Object.keys(compressed.al).length === 0) delete compressed.al;
+    if (Object.keys(compressed.dl).length === 0) delete compressed.dl;
+
+    return compressed;
+}
+
+/**
+ * Decompress battle result from share format back to full format
+ */
+function decompressBattleResult(compressed) {
+    // Check if this is the new format with full rounds data
+    if (compressed.rds && compressed.rds.length > 0) {
+        const rounds = [];
+
+        for (const compRound of compressed.rds) {
+            // Reconstruct attacker ships
+            const attackerShips = {};
+            if (compRound.as) {
+                for (const [unitId, amount] of Object.entries(compRound.as)) {
+                    attackerShips[unitId] = { amount: amount };
+                }
+            }
+
+            // Reconstruct defender ships
+            const defenderShips = {};
+            if (compRound.ds) {
+                for (const [unitId, amount] of Object.entries(compRound.ds)) {
+                    defenderShips[unitId] = { amount: amount };
+                }
+            }
+
+            // Reconstruct attacker losses in round
+            const attackerLossesInRound = {};
+            if (compRound.alr) {
+                for (const [unitId, amount] of Object.entries(compRound.alr)) {
+                    attackerLossesInRound[unitId] = { amount: amount };
+                }
+            }
+
+            // Reconstruct defender losses in round
+            const defenderLossesInRound = {};
+            if (compRound.dlr) {
+                for (const [unitId, amount] of Object.entries(compRound.dlr)) {
+                    defenderLossesInRound[unitId] = { amount: amount };
+                }
+            }
+
+            rounds.push({
+                attacker_ships: attackerShips,
+                defender_ships: defenderShips,
+                attacker_losses: {},  // Will be populated for last round
+                defender_losses: {},  // Will be populated for last round
+                attacker_losses_in_round: attackerLossesInRound,
+                defender_losses_in_round: defenderLossesInRound,
+                hits_attacker: compRound.ha || 0,
+                hits_defender: compRound.hd || 0,
+                full_strength_attacker: compRound.sa || 0,
+                full_strength_defender: compRound.sd || 0,
+                absorbed_damage_attacker: compRound.aa || 0,
+                absorbed_damage_defender: compRound.ad || 0
+            });
+        }
+
+        // Add total losses to last round
+        const lastRound = rounds[rounds.length - 1];
+        if (compressed.al) {
+            for (const [unitId, amount] of Object.entries(compressed.al)) {
+                lastRound.attacker_losses[unitId] = { amount: amount };
+            }
+        }
+        if (compressed.dl) {
+            for (const [unitId, amount] of Object.entries(compressed.dl)) {
+                lastRound.defender_losses[unitId] = { amount: amount };
+            }
+        }
+
+        return {
+            result: {
+                rounds: rounds,
+                winner: compressed.w
+            },
+            runs: compressed.n
+        };
+    }
+
+    // Legacy format support (old share codes without rounds data)
+    const attackerShips = {};
+    if (compressed.as) {
+        for (const [unitId, amount] of Object.entries(compressed.as)) {
+            attackerShips[unitId] = { amount: amount };
+        }
+    }
+
+    const defenderShips = {};
+    if (compressed.ds) {
+        for (const [unitId, amount] of Object.entries(compressed.ds)) {
+            defenderShips[unitId] = { amount: amount };
+        }
+    }
+
+    const attackerLosses = {};
+    if (compressed.al) {
+        for (const [unitId, amount] of Object.entries(compressed.al)) {
+            attackerLosses[unitId] = { amount: amount };
+        }
+    }
+
+    const defenderLosses = {};
+    if (compressed.dl) {
+        for (const [unitId, amount] of Object.entries(compressed.dl)) {
+            defenderLosses[unitId] = { amount: amount };
+        }
+    }
+
+    const lastRound = {
+        attacker_ships: attackerShips,
+        defender_ships: defenderShips,
+        attacker_losses: attackerLosses,
+        defender_losses: defenderLosses,
+        attacker_losses_in_round: {},
+        defender_losses_in_round: {},
+        hits_attacker: 0,
+        hits_defender: 0,
+        full_strength_attacker: 0,
+        full_strength_defender: 0,
+        absorbed_damage_attacker: 0,
+        absorbed_damage_defender: 0
+    };
+
+    return {
+        result: {
+            rounds: [lastRound],
+            winner: compressed.w
+        },
+        runs: compressed.n
+    };
+}
+
+/**
+ * Apply share data to the form
+ * Handles backward/forward compatibility
+ */
+function applyShareData(data) {
+    // Handle version differences (future-proofing)
+    const version = data.v || 1;
+
+    // Clear all inputs first
+    clearAll();
+
+    // Apply attacker technologies
+    if (data.atk?.t) {
+        if (data.atk.t.w) document.getElementById('atkWeapons').value = data.atk.t.w;
+        if (data.atk.t.s) document.getElementById('atkShielding').value = data.atk.t.s;
+        if (data.atk.t.a) document.getElementById('atkArmour').value = data.atk.t.a;
+        if (data.atk.t.c) document.getElementById('atkCombustion').value = data.atk.t.c;
+        if (data.atk.t.i) document.getElementById('atkImpulse').value = data.atk.t.i;
+        if (data.atk.t.h) document.getElementById('atkHyperspace').value = data.atk.t.h;
+        if (data.atk.t.ht) {
+            const htInput = document.getElementById('atkHyperspaceTech');
+            if (htInput) htInput.value = data.atk.t.ht;
+        }
+    }
+
+    // Apply attacker units
+    if (data.atk?.u) {
+        for (const [unitId, amount] of Object.entries(data.atk.u)) {
+            const input = document.getElementById(`atk-${unitId}`);
+            if (input) input.value = amount;
+        }
+    }
+
+    // Apply defender technologies
+    if (data.def?.t) {
+        if (data.def.t.w) document.getElementById('defWeapons').value = data.def.t.w;
+        if (data.def.t.s) document.getElementById('defShielding').value = data.def.t.s;
+        if (data.def.t.a) document.getElementById('defArmour').value = data.def.t.a;
+        if (data.def.t.c) document.getElementById('defCombustion').value = data.def.t.c;
+        if (data.def.t.i) document.getElementById('defImpulse').value = data.def.t.i;
+        if (data.def.t.h) document.getElementById('defHyperspace').value = data.def.t.h;
+        if (data.def.t.ht) {
+            const htInput = document.getElementById('defHyperspaceTech');
+            if (htInput) htInput.value = data.def.t.ht;
+        }
+    }
+
+    // Apply defender units (ships and defense)
+    if (data.def?.u) {
+        for (const [unitId, amount] of Object.entries(data.def.u)) {
+            const input = document.getElementById(`def-${unitId}`);
+            if (input) input.value = amount;
+        }
+    }
+
+    // Apply defender resources
+    if (data.def?.r) {
+        if (data.def.r.m) {
+            const input = document.getElementById('defenderMetal');
+            if (input) input.value = data.def.r.m;
+        }
+        if (data.def.r.c) {
+            const input = document.getElementById('defenderCrystal');
+            if (input) input.value = data.def.r.c;
+        }
+        if (data.def.r.d) {
+            const input = document.getElementById('defenderDeuterium');
+            if (input) input.value = data.def.r.d;
+        }
+    }
+
+    // Apply simulation settings
+    if (data.s) {
+        if (data.s.n) {
+            const input = document.getElementById('simulationRuns');
+            if (input) input.value = data.s.n;
+        }
+        if (data.s.p) {
+            const input = document.getElementById('plunderPercent');
+            if (input) input.value = data.s.p;
+        }
+        if (data.s.ds !== undefined) {
+            const input = document.getElementById('debrisShipPercent');
+            if (input) input.value = data.s.ds;
+        }
+        if (data.s.dd !== undefined) {
+            const input = document.getElementById('debrisDefensePercent');
+            if (input) input.value = data.s.dd;
+        }
+        if (data.s.de) {
+            const input = document.getElementById('debrisDeuteriumEnabled');
+            if (input) input.checked = true;
+        }
+    }
+
+    // Apply flight time settings
+    if (data.ft) {
+        if (data.ft.og) document.getElementById('originGalaxy').value = data.ft.og;
+        if (data.ft.os) document.getElementById('originSystem').value = data.ft.os;
+        if (data.ft.op) document.getElementById('originPlanet').value = data.ft.op;
+        if (data.ft.tg) document.getElementById('targetGalaxy').value = data.ft.tg;
+        if (data.ft.ts) document.getElementById('targetSystem').value = data.ft.ts;
+        if (data.ft.tp) document.getElementById('targetPlanet').value = data.ft.tp;
+        if (data.ft.sp) document.getElementById('fleetSpeedPercent').value = data.ft.sp;
+        // Universe fleet speed settings
+        if (data.ft.fsw) document.getElementById('fleetSpeedWar').value = data.ft.fsw;
+        if (data.ft.fsh) document.getElementById('fleetSpeedHolding').value = data.ft.fsh;
+        if (data.ft.fsp) document.getElementById('fleetSpeedPeaceful').value = data.ft.fsp;
+        // Backward compatibility: old 'fs' key maps to fleetSpeedWar
+        if (data.ft.fs && !data.ft.fsw) document.getElementById('fleetSpeedWar').value = data.ft.fs;
+    }
+
+    // Update flight time display
+    updateFlightTime();
+
+    // Apply battle results if included
+    if (data.br) {
+        const battleData = decompressBattleResult(data.br);
+        lastBattleResult = battleData;
+        displayResults(JSON.stringify(battleData.result), battleData.runs);
+    }
+}
+
+/**
+ * Generate a share code from current form state
+ */
+function generateShareCode() {
+    try {
+        const data = collectShareData();
+        const json = JSON.stringify(data);
+
+        // Use LZ-String compression if available, otherwise fallback to base64
+        let code;
+        if (typeof LZString !== 'undefined') {
+            code = LZString.compressToEncodedURIComponent(json);
+        } else {
+            // Fallback to base64 (larger but works without library)
+            code = btoa(unescape(encodeURIComponent(json)));
+        }
+
+        const shareInput = document.getElementById('shareCode');
+        shareInput.value = code;
+        shareInput.readOnly = true;
+
+        // Show appropriate status message
+        const hasResults = data.br !== undefined;
+        const statusMsg = hasResults
+            ? 'Share code generated with battle results! Click Copy to copy.'
+            : 'Share code generated (setup only). Click Copy to copy.';
+        showShareStatus(statusMsg, 'success');
+    } catch (error) {
+        console.error('Failed to generate share code:', error);
+        showShareStatus('Failed to generate share code: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Import a share code and apply to form
+ */
+function importShareCode() {
+    const shareInput = document.getElementById('shareCode');
+    const code = shareInput.value.trim();
+
+    if (!code) {
+        showShareStatus('Please paste a share code first', 'error');
+        return;
+    }
+
+    try {
+        let json;
+
+        // Try LZ-String decompression first
+        if (typeof LZString !== 'undefined') {
+            json = LZString.decompressFromEncodedURIComponent(code);
+        }
+
+        // If that fails or returns null, try base64
+        if (!json) {
+            try {
+                json = decodeURIComponent(escape(atob(code)));
+            } catch (e) {
+                throw new Error('Invalid share code format');
+            }
+        }
+
+        const data = JSON.parse(json);
+
+        // Validate it has a version number (basic structure check)
+        if (!data.v) {
+            throw new Error('Invalid share code: missing version');
+        }
+
+        applyShareData(data);
+
+        // Show appropriate status message
+        const hasResults = data.br !== undefined;
+        const statusMsg = hasResults
+            ? 'Imported battle setup with results!'
+            : 'Battle setup imported successfully!';
+        showShareStatus(statusMsg, 'success');
+    } catch (error) {
+        console.error('Failed to import share code:', error);
+        showShareStatus('Failed to import: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Copy share code to clipboard
+ */
+function copyShareCode() {
+    const shareInput = document.getElementById('shareCode');
+    const code = shareInput.value;
+
+    if (!code) {
+        showShareStatus('Generate a share code first', 'error');
+        return;
+    }
+
+    navigator.clipboard.writeText(code).then(() => {
+        showShareStatus('Copied to clipboard!', 'success');
+    }).catch(err => {
+        // Fallback for older browsers
+        shareInput.select();
+        document.execCommand('copy');
+        showShareStatus('Copied to clipboard!', 'success');
+    });
+}
+
+/**
+ * Show status message in share section
+ */
+function showShareStatus(message, type) {
+    const statusEl = document.getElementById('shareStatus');
+    statusEl.textContent = message;
+    statusEl.className = 'share-status ' + type;
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        statusEl.className = 'share-status';
+    }, 5000);
+}
+
+/**
+ * Check URL for share code parameter on page load
+ */
+function checkUrlForShareCode() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareCode = urlParams.get('share');
+
+    if (shareCode) {
+        document.getElementById('shareCode').value = shareCode;
+        // Small delay to ensure DOM is ready
+        setTimeout(() => {
+            importShareCode();
+        }, 100);
+    }
 }

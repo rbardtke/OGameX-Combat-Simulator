@@ -95,7 +95,7 @@ Planned features (not yet implemented):
 - [ ] Multiple waves support
 - [ ] API Key integration (OGameX)
 - [ ] Tactical retreat
-- [ ] Share function
+- [x] Share function (battle setup sharing with compressed codes)
 - [ ] Geologist support
 - [ ] Character classes (Collector, General, Discoverer)
 

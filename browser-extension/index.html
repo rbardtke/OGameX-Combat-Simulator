@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OGame Combat Simulator</title>
     <link rel="stylesheet" href="style.css">
+    <script src="lz-string.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -594,6 +595,22 @@
                 <button id="exampleBtn" class="example-btn">📋 Load Example</button>
             </div>
 
+            <!-- Share Section -->
+            <div class="share-section">
+                <h3>📤 Share Battle Setup</h3>
+                <div class="share-content">
+                    <div class="share-input-group">
+                        <input type="text" id="shareCode" placeholder="Paste share code here to import..." readonly>
+                        <button id="copyShareBtn" class="share-btn copy-btn" title="Copy to clipboard">📋 Copy</button>
+                    </div>
+                    <div class="share-buttons">
+                        <button id="generateShareBtn" class="share-btn generate-btn">🔗 Generate Share Code</button>
+                        <button id="importShareBtn" class="share-btn import-btn">📥 Import</button>
+                    </div>
+                    <div id="shareStatus" class="share-status"></div>
+                </div>
+            </div>
+
             <!-- Results Section -->
             <div id="resultSection" class="result-section" style="display: none;">
                 <h2>📊 Battle Results</h2>
@@ -763,6 +780,6 @@
         </div>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
