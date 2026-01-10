@@ -388,6 +388,145 @@ button:disabled {
     line-height: 1.5;
 }
 
+/* Setup tab styles */
+.setup-info {
+    padding: 10px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+}
+
+.class-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.class-icon-small {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+}
+
+.class-display span {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #ffd700;
+}
+
+.tech-display {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tech-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.9rem;
+}
+
+.tech-row span:first-child {
+    color: #60a5fa;
+}
+
+.tech-row span:last-child {
+    color: #fff;
+    font-weight: 500;
+}
+
+.tech-row .bonus {
+    color: #4ade80;
+    font-size: 0.85rem;
+}
+
+.initial-units {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.units-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #60a5fa;
+    margin-bottom: 8px;
+}
+
+/* End tab styles */
+.end-winner {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 15px;
+}
+
+.end-winner.draw {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+}
+
+.end-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.summary-section {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.summary-header {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.summary-header.surviving {
+    color: #4ade80;
+}
+
+.summary-header.losses {
+    color: #fca5a5;
+}
+
+.unit-item.loss {
+    color: #fca5a5;
+}
+
+.unit-item:has(+ .loss-value) {
+    border-bottom: 3px solid rgba(255, 255, 255, 0.1);
+}
+
+.unit-item + .loss-value {
+    margin-top: 0;
+    border-top: none;
+}
+
+.unit-item.destroyed {
+    color: #fca5a5;
+    font-style: italic;
+}
+
+.loss-value {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 3px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.85rem;
+    color: #ffd700;
+    font-weight: 500;
+}
+
 .unit-item {
     padding: 4px 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -498,11 +637,21 @@ footer {
     font-size: 1.1rem;
 }
 
-.plunder-section, .wreckfield-section, .reaper-section {
+.plunder-section, .moon-chance-section, .wreckfield-section, .reaper-section {
     margin-bottom: 15px;
     padding: 10px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 5px;
+}
+
+.moon-chance-section {
+    background: rgba(180, 180, 220, 0.1);
+    border: 1px solid rgba(180, 180, 220, 0.3);
+}
+
+.moon-chance-section h3 {
+    color: #c4c4e0;
+    margin-bottom: 5px;
 }
 
 .reaper-section {
@@ -538,6 +687,70 @@ footer {
 
 .resource-row:last-child {
     border-bottom: none;
+}
+
+/* Simulation Statistics */
+.simulation-stats {
+    background: rgba(0, 0, 0, 0.3);
+    border: 2px solid rgba(255, 215, 0, 0.3);
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.stats-header {
+    text-align: center;
+    color: #ffd700;
+    font-weight: 600;
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+}
+
+.stat-label {
+    display: block;
+    font-size: 0.8rem;
+    color: #9ca3af;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 700;
+}
+
+.attacker-stat .stat-value {
+    color: #4ade80;
+}
+
+.defender-stat .stat-value {
+    color: #fca5a5;
+}
+
+.draw-stat .stat-value {
+    color: #f59e0b;
+}
+
+.rounds-stat .stat-value {
+    color: #60a5fa;
+}
+
+/* End winner defender style */
+.end-winner.defender {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
 }
 
 /* Tabs */
@@ -1143,5 +1356,10 @@ footer {
 
     .share-btn {
         width: 100%;
+    }
+
+    /* Stats Grid Responsive */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
     }
 }

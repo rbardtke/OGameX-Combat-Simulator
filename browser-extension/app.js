@@ -327,36 +327,236 @@ function displayResults(output, numRuns = 1) {
     tabsHeader.innerHTML = '';
     tabsContent.innerHTML = '';
 
-    // Determine winner
+    // Determine winner from the final state or statistics
     const lastRound = results.rounds[results.rounds.length - 1];
+    const statistics = results.statistics; // Available when multiple runs
     const attackerSurvived = Object.keys(lastRound.attacker_ships).length > 0;
     const defenderSurvived = Object.keys(lastRound.defender_ships).length > 0;
+    const isAveragedFinal = lastRound.is_final_averaged;
 
     let winner = '';
-    if (attackerSurvived && !defenderSurvived) {
-        winner = '🚀 Attacker Wins!';
-    } else if (!attackerSurvived && defenderSurvived) {
-        winner = '🛡️ Defender Wins!';
-    } else if (!attackerSurvived && !defenderSurvived) {
-        winner = '💥 Draw - Both Sides Destroyed!';
+    let winnerType = 'attacker'; // For styling: 'attacker', 'defender', 'draw'
+
+    if (statistics) {
+        // Use statistics for winner display when available
+        if (statistics.attackerWinPercent > statistics.defenderWinPercent && statistics.attackerWinPercent > statistics.drawPercent) {
+            winner = `🚀 Attacker Wins (${statistics.attackerWinPercent}%)`;
+            winnerType = 'attacker';
+        } else if (statistics.defenderWinPercent > statistics.attackerWinPercent && statistics.defenderWinPercent > statistics.drawPercent) {
+            winner = `🛡️ Defender Wins (${statistics.defenderWinPercent}%)`;
+            winnerType = 'defender';
+        } else if (statistics.drawPercent > 0 && statistics.drawPercent >= statistics.attackerWinPercent && statistics.drawPercent >= statistics.defenderWinPercent) {
+            winner = `⚔️ Draw (${statistics.drawPercent}%)`;
+            winnerType = 'draw';
+        } else if (statistics.attackerWinPercent === 100) {
+            winner = '🚀 Attacker Wins!';
+            winnerType = 'attacker';
+        } else if (statistics.defenderWinPercent === 100) {
+            winner = '🛡️ Defender Wins!';
+            winnerType = 'defender';
+        } else {
+            winner = '📊 Mixed Results';
+            winnerType = 'draw';
+        }
     } else {
-        winner = '⚔️ Battle Continues (6 rounds limit reached)';
+        // Single run - use direct outcome
+        if (attackerSurvived && !defenderSurvived) {
+            winner = '🚀 Attacker Wins!';
+            winnerType = 'attacker';
+        } else if (!attackerSurvived && defenderSurvived) {
+            winner = '🛡️ Defender Wins!';
+            winnerType = 'defender';
+        } else if (!attackerSurvived && !defenderSurvived) {
+            winner = '💥 Draw - Both Sides Destroyed!';
+            winnerType = 'draw';
+        } else {
+            winner = '⚔️ Draw (6 rounds limit reached)';
+            winnerType = 'draw';
+        }
     }
 
-    // Add simulation info header if multiple runs
-    if (numRuns > 1) {
+    // Add simulation info header with statistics if multiple runs
+    if (numRuns > 1 && statistics) {
         const infoDiv = document.createElement('div');
-        infoDiv.style.cssText = 'background: rgba(255, 215, 0, 0.1); border: 2px solid rgba(255, 215, 0, 0.3); border-radius: 8px; padding: 10px; margin-bottom: 15px; text-align: center; color: #ffd700;';
-        infoDiv.innerHTML = `<strong>📊 Averaged results from ${numRuns} simulation runs</strong>`;
+        infoDiv.className = 'simulation-stats';
+        infoDiv.innerHTML = `
+            <div class="stats-header">📊 Results from ${numRuns} simulations</div>
+            <div class="stats-grid">
+                <div class="stat-item attacker-stat">
+                    <span class="stat-label">Attacker wins</span>
+                    <span class="stat-value">${statistics.attackerWinPercent}%</span>
+                </div>
+                <div class="stat-item defender-stat">
+                    <span class="stat-label">Defender wins</span>
+                    <span class="stat-value">${statistics.defenderWinPercent}%</span>
+                </div>
+                <div class="stat-item draw-stat">
+                    <span class="stat-label">Draw</span>
+                    <span class="stat-value">${statistics.drawPercent}%</span>
+                </div>
+                <div class="stat-item rounds-stat">
+                    <span class="stat-label">Avg. rounds</span>
+                    <span class="stat-value">${statistics.averageRounds}</span>
+                </div>
+            </div>
+        `;
         tabsHeader.parentElement.insertBefore(infoDiv, tabsHeader);
     }
 
+    // Helper function to get class name from value
+    const getClassName = (classValue) => {
+        switch (classValue) {
+            case 1: return 'Collector';
+            case 2: return 'General';
+            case 3: return 'Discoverer';
+            default: return 'None';
+        }
+    };
+
+    // Helper function to get class icon path
+    const getClassIcon = (classValue) => {
+        switch (classValue) {
+            case 1: return 'img/classes/collector.png';
+            case 2: return 'img/classes/general.png';
+            case 3: return 'img/classes/discoverer.png';
+            default: return 'img/classes/none.png';
+        }
+    };
+
+    // Create Battle Setup tab (before rounds)
+    const setupTabButton = document.createElement('button');
+    setupTabButton.className = 'tab-button active';
+    setupTabButton.textContent = 'Setup';
+    setupTabButton.onclick = () => switchTab('setup');
+    tabsHeader.appendChild(setupTabButton);
+
+    // Create Setup tab content
+    const setupPane = document.createElement('div');
+    setupPane.className = 'tab-content active';
+    setupPane.id = 'round-setup';
+
+    // Get current form values for technologies and classes
+    const atkClass = getCharacterClass('attacker');
+    const defClass = getCharacterClass('defender');
+
+    const atkWeapons = parseInt(document.getElementById('atkWeapons')?.value) || 0;
+    const atkShielding = parseInt(document.getElementById('atkShielding')?.value) || 0;
+    const atkArmour = parseInt(document.getElementById('atkArmour')?.value) || 0;
+
+    const defWeapons = parseInt(document.getElementById('defWeapons')?.value) || 0;
+    const defShielding = parseInt(document.getElementById('defShielding')?.value) || 0;
+    const defArmour = parseInt(document.getElementById('defArmour')?.value) || 0;
+
+    // Calculate effective tech levels with General bonus
+    const atkEffectiveWeapons = atkClass === CHARACTER_CLASSES.GENERAL ? atkWeapons + GENERAL_COMBAT_BONUS : atkWeapons;
+    const atkEffectiveShielding = atkClass === CHARACTER_CLASSES.GENERAL ? atkShielding + GENERAL_COMBAT_BONUS : atkShielding;
+    const atkEffectiveArmour = atkClass === CHARACTER_CLASSES.GENERAL ? atkArmour + GENERAL_COMBAT_BONUS : atkArmour;
+
+    const defEffectiveWeapons = defClass === CHARACTER_CLASSES.GENERAL ? defWeapons + GENERAL_COMBAT_BONUS : defWeapons;
+    const defEffectiveShielding = defClass === CHARACTER_CLASSES.GENERAL ? defShielding + GENERAL_COMBAT_BONUS : defShielding;
+    const defEffectiveArmour = defClass === CHARACTER_CLASSES.GENERAL ? defArmour + GENERAL_COMBAT_BONUS : defArmour;
+
+    // Collect initial units from form inputs
+    const collectInitialUnits = (prefix) => {
+        const units = [];
+        // Ships (202-219)
+        for (let unitId = 202; unitId <= 219; unitId++) {
+            const input = document.getElementById(`${prefix}-${unitId}`);
+            if (input) {
+                const amount = parseInt(input.value) || 0;
+                if (amount > 0) {
+                    units.push({ id: unitId, name: UNITS[unitId]?.name || `Unit ${unitId}`, amount });
+                }
+            }
+        }
+        // Defense (401-408) - only for defender
+        if (prefix === 'def') {
+            for (let unitId = 401; unitId <= 408; unitId++) {
+                const input = document.getElementById(`${prefix}-${unitId}`);
+                if (input) {
+                    const amount = parseInt(input.value) || 0;
+                    if (amount > 0) {
+                        units.push({ id: unitId, name: UNITS[unitId]?.name || `Unit ${unitId}`, amount });
+                    }
+                }
+            }
+        }
+        return units;
+    };
+
+    const atkInitialUnits = collectInitialUnits('atk');
+    const defInitialUnits = collectInitialUnits('def');
+
+    let setupHtml = '<div class="round">';
+    setupHtml += '<h3>Battle Setup</h3>';
+    setupHtml += '<div class="round-stats">';
+
+    // Attacker setup
+    setupHtml += '<div class="stat-group">';
+    setupHtml += '<h4>🚀 Attacker</h4>';
+    setupHtml += '<div class="setup-info">';
+    setupHtml += `<div class="class-display"><img src="${getClassIcon(atkClass)}" alt="${getClassName(atkClass)}" class="class-icon-small"> <span>${getClassName(atkClass)}</span></div>`;
+    setupHtml += '<div class="tech-display">';
+    setupHtml += `<div class="tech-row"><span>Weapons:</span> <span>${atkWeapons}${atkClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${atkEffectiveWeapons})</span>` : ''}</span></div>`;
+    setupHtml += `<div class="tech-row"><span>Shielding:</span> <span>${atkShielding}${atkClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${atkEffectiveShielding})</span>` : ''}</span></div>`;
+    setupHtml += `<div class="tech-row"><span>Armour:</span> <span>${atkArmour}${atkClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${atkEffectiveArmour})</span>` : ''}</span></div>`;
+    setupHtml += '</div>';
+    // Initial units
+    setupHtml += '<div class="initial-units">';
+    setupHtml += '<div class="units-header">Initial Fleet</div>';
+    setupHtml += '<div class="unit-list">';
+    if (atkInitialUnits.length > 0) {
+        for (const unit of atkInitialUnits) {
+            setupHtml += `<div class="unit-item">${unit.name}: ${unit.amount.toLocaleString()}</div>`;
+        }
+    } else {
+        setupHtml += '<div class="unit-item" style="opacity: 0.5;">No units</div>';
+    }
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+
+    // Defender setup
+    setupHtml += '<div class="stat-group">';
+    setupHtml += '<h4>🛡️ Defender</h4>';
+    setupHtml += '<div class="setup-info">';
+    setupHtml += `<div class="class-display"><img src="${getClassIcon(defClass)}" alt="${getClassName(defClass)}" class="class-icon-small"> <span>${getClassName(defClass)}</span></div>`;
+    setupHtml += '<div class="tech-display">';
+    setupHtml += `<div class="tech-row"><span>Weapons:</span> <span>${defWeapons}${defClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${defEffectiveWeapons})</span>` : ''}</span></div>`;
+    setupHtml += `<div class="tech-row"><span>Shielding:</span> <span>${defShielding}${defClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${defEffectiveShielding})</span>` : ''}</span></div>`;
+    setupHtml += `<div class="tech-row"><span>Armour:</span> <span>${defArmour}${defClass === CHARACTER_CLASSES.GENERAL ? ` <span class="bonus">(+${GENERAL_COMBAT_BONUS} = ${defEffectiveArmour})</span>` : ''}</span></div>`;
+    setupHtml += '</div>';
+    // Initial units
+    setupHtml += '<div class="initial-units">';
+    setupHtml += '<div class="units-header">Initial Forces</div>';
+    setupHtml += '<div class="unit-list">';
+    if (defInitialUnits.length > 0) {
+        for (const unit of defInitialUnits) {
+            setupHtml += `<div class="unit-item">${unit.name}: ${unit.amount.toLocaleString()}</div>`;
+        }
+    } else {
+        setupHtml += '<div class="unit-item" style="opacity: 0.5;">No units</div>';
+    }
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+
+    setupHtml += '</div>';
+    setupHtml += '</div>';
+
+    setupPane.innerHTML = setupHtml;
+    tabsContent.appendChild(setupPane);
+
     // Create tabs for each round
     results.rounds.forEach((round, index) => {
+        // Skip the final averaged round - it will be shown in the End tab
+        if (round.is_final_averaged) return;
+
         // Create tab button
         const tabButton = document.createElement('button');
         tabButton.className = 'tab-button';
-        if (index === 0) tabButton.classList.add('active');
         tabButton.textContent = `Round ${index + 1}`;
         tabButton.onclick = () => switchTab(index);
         tabsHeader.appendChild(tabButton);
@@ -364,7 +564,6 @@ function displayResults(output, numRuns = 1) {
         // Create tab content
         const tabPane = document.createElement('div');
         tabPane.className = 'tab-content';
-        if (index === 0) tabPane.classList.add('active');
         tabPane.id = `round-${index}`;
 
         let html = '<div class="round">';
@@ -394,6 +593,8 @@ function displayResults(output, numRuns = 1) {
         // Attacker stats
         html += `<div class="stat-group">`;
         html += `<h4>🚀 Attacker</h4>`;
+        html += `<div class="setup-info">`;
+        html += `<div class="units-header">Remaining Fleet</div>`;
         html += `<div class="unit-list">`;
 
         if (Object.keys(round.attacker_ships).length > 0) {
@@ -402,15 +603,20 @@ function displayResults(output, numRuns = 1) {
                 html += `<div class="unit-item">${unitName}: ${unit.amount.toLocaleString()}</div>`;
             }
         } else {
-            html += `<div class="unit-item">All destroyed</div>`;
+            html += `<div class="unit-item destroyed">All destroyed</div>`;
         }
+        html += `</div>`;
 
         if (Object.keys(round.attacker_losses_in_round).length > 0) {
-            html += `<div style="margin-top: 10px; color: #fca5a5;">Losses this round:</div>`;
+            html += `<div class="initial-units">`;
+            html += `<div class="units-header" style="color: #fca5a5;">Losses this round</div>`;
+            html += `<div class="unit-list">`;
             for (const [unitId, unit] of Object.entries(round.attacker_losses_in_round)) {
                 const unitName = UNITS[parseInt(unitId)]?.name || `Unit ${unitId}`;
-                html += `<div class="unit-item" style="color: #fca5a5;">-${unit.amount.toLocaleString()} ${unitName}</div>`;
+                html += `<div class="unit-item loss">-${unit.amount.toLocaleString()} ${unitName}</div>`;
             }
+            html += `</div>`;
+            html += `</div>`;
         }
 
         html += `</div></div>`;
@@ -418,6 +624,8 @@ function displayResults(output, numRuns = 1) {
         // Defender stats
         html += `<div class="stat-group">`;
         html += `<h4>🛡️ Defender</h4>`;
+        html += `<div class="setup-info">`;
+        html += `<div class="units-header">Remaining Forces</div>`;
         html += `<div class="unit-list">`;
 
         if (Object.keys(round.defender_ships).length > 0) {
@@ -426,15 +634,20 @@ function displayResults(output, numRuns = 1) {
                 html += `<div class="unit-item">${unitName}: ${unit.amount.toLocaleString()}</div>`;
             }
         } else {
-            html += `<div class="unit-item">All destroyed</div>`;
+            html += `<div class="unit-item destroyed">All destroyed</div>`;
         }
+        html += `</div>`;
 
         if (Object.keys(round.defender_losses_in_round).length > 0) {
-            html += `<div style="margin-top: 10px; color: #fca5a5;">Losses this round:</div>`;
+            html += `<div class="initial-units">`;
+            html += `<div class="units-header" style="color: #fca5a5;">Losses this round</div>`;
+            html += `<div class="unit-list">`;
             for (const [unitId, unit] of Object.entries(round.defender_losses_in_round)) {
                 const unitName = UNITS[parseInt(unitId)]?.name || `Unit ${unitId}`;
-                html += `<div class="unit-item" style="color: #fca5a5;">-${unit.amount.toLocaleString()} ${unitName}</div>`;
+                html += `<div class="unit-item loss">-${unit.amount.toLocaleString()} ${unitName}</div>`;
             }
+            html += `</div>`;
+            html += `</div>`;
         }
 
         html += `</div></div>`;
@@ -445,18 +658,150 @@ function displayResults(output, numRuns = 1) {
         tabsContent.appendChild(tabPane);
     });
 
-    // Add winner display after tabs
+    // Create End tab (after all rounds)
+    const endTabButton = document.createElement('button');
+    endTabButton.className = 'tab-button';
+    endTabButton.textContent = 'End';
+    endTabButton.onclick = () => switchTab('end');
+    tabsHeader.appendChild(endTabButton);
+
+    // Create End tab content
+    const endPane = document.createElement('div');
+    endPane.className = 'tab-content';
+    endPane.id = 'round-end';
+
+    // Calculate total losses
+    const calculateTotalLosses = (initialUnits, remainingShips) => {
+        const losses = [];
+        for (const unit of initialUnits) {
+            const remaining = remainingShips[unit.id]?.amount || 0;
+            const lost = unit.amount - remaining;
+            if (lost > 0) {
+                losses.push({ id: unit.id, name: unit.name, amount: lost });
+            }
+        }
+        return losses;
+    };
+
+    const atkLosses = calculateTotalLosses(atkInitialUnits, lastRound.attacker_ships);
+    const defLosses = calculateTotalLosses(defInitialUnits, lastRound.defender_ships);
+
+    // Calculate loss values
+    const calculateLossValue = (losses) => {
+        let metal = 0, crystal = 0, deuterium = 0;
+        for (const loss of losses) {
+            const unit = UNITS[loss.id];
+            if (unit) {
+                metal += unit.cost.metal * loss.amount;
+                crystal += unit.cost.crystal * loss.amount;
+                deuterium += unit.cost.deuterium * loss.amount;
+            }
+        }
+        return { metal, crystal, deuterium, total: metal + crystal + deuterium };
+    };
+
+    const atkLossValue = calculateLossValue(atkLosses);
+    const defLossValue = calculateLossValue(defLosses);
+
+    let endHtml = '<div class="round">';
+    endHtml += '<h3>Battle Summary</h3>';
+
+    // Winner banner - use winnerType for styling
+    endHtml += `<div class="end-winner ${winnerType === 'draw' ? 'draw' : (winnerType === 'defender' ? 'defender' : '')}">${winner}</div>`;
+
+    endHtml += '<div class="round-stats">';
+
+    // Attacker end summary
+    endHtml += '<div class="stat-group">';
+    endHtml += '<h4>🚀 Attacker</h4>';
+    endHtml += '<div class="setup-info">';
+
+    // Surviving units
+    endHtml += '<div class="units-header" style="color: #4ade80;">Surviving Units</div>';
+    endHtml += '<div class="unit-list">';
+    if (Object.keys(lastRound.attacker_ships).length > 0) {
+        for (const [unitId, unit] of Object.entries(lastRound.attacker_ships)) {
+            const unitName = UNITS[parseInt(unitId)]?.name || `Unit ${unitId}`;
+            endHtml += `<div class="unit-item">${unitName}: ${unit.amount.toLocaleString()}</div>`;
+        }
+    } else {
+        endHtml += '<div class="unit-item destroyed">All destroyed</div>';
+    }
+    endHtml += '</div>';
+
+    // Total losses
+    endHtml += '<div class="initial-units">';
+    endHtml += '<div class="units-header" style="color: #fca5a5;">Total Losses</div>';
+    endHtml += '<div class="unit-list">';
+    if (atkLosses.length > 0) {
+        for (const loss of atkLosses) {
+            endHtml += `<div class="unit-item loss">-${loss.amount.toLocaleString()} ${loss.name}</div>`;
+        }
+        endHtml += `<div class="loss-value">Value: ${atkLossValue.total.toLocaleString()} units</div>`;
+    } else {
+        endHtml += '<div class="unit-item" style="color: #4ade80;">No losses!</div>';
+    }
+    endHtml += '</div>';
+    endHtml += '</div>';
+
+    endHtml += '</div>';
+    endHtml += '</div>';
+
+    // Defender end summary
+    endHtml += '<div class="stat-group">';
+    endHtml += '<h4>🛡️ Defender</h4>';
+    endHtml += '<div class="setup-info">';
+
+    // Surviving units
+    endHtml += '<div class="units-header" style="color: #4ade80;">Surviving Units</div>';
+    endHtml += '<div class="unit-list">';
+    if (Object.keys(lastRound.defender_ships).length > 0) {
+        for (const [unitId, unit] of Object.entries(lastRound.defender_ships)) {
+            const unitName = UNITS[parseInt(unitId)]?.name || `Unit ${unitId}`;
+            endHtml += `<div class="unit-item">${unitName}: ${unit.amount.toLocaleString()}</div>`;
+        }
+    } else {
+        endHtml += '<div class="unit-item destroyed">All destroyed</div>';
+    }
+    endHtml += '</div>';
+
+    // Total losses
+    endHtml += '<div class="initial-units">';
+    endHtml += '<div class="units-header" style="color: #fca5a5;">Total Losses</div>';
+    endHtml += '<div class="unit-list">';
+    if (defLosses.length > 0) {
+        for (const loss of defLosses) {
+            endHtml += `<div class="unit-item loss">-${loss.amount.toLocaleString()} ${loss.name}</div>`;
+        }
+        endHtml += `<div class="loss-value">Value: ${defLossValue.total.toLocaleString()} units</div>`;
+    } else {
+        endHtml += '<div class="unit-item" style="color: #4ade80;">No losses!</div>';
+    }
+    endHtml += '</div>';
+    endHtml += '</div>';
+
+    endHtml += '</div>';
+    endHtml += '</div>';
+
+    endHtml += '</div>';
+    endHtml += '</div>';
+
+    endPane.innerHTML = endHtml;
+    tabsContent.appendChild(endPane);
+
+    // Add winner display after tabs (keep for backward compatibility but hide it since End tab shows it)
     const winnerDiv = document.createElement('div');
-    winnerDiv.className = winner.includes('Draw') ? 'winner draw' : 'winner';
+    winnerDiv.className = winnerType === 'draw' ? 'winner draw' : 'winner';
     winnerDiv.textContent = winner;
     winnerDiv.style.marginTop = '20px';
+    winnerDiv.style.display = 'none'; // Hide since End tab shows winner
     tabsContent.appendChild(winnerDiv);
 
     // Update remaining units display
     updateRemainingUnits(lastRound);
 
     // Calculate and display debris, plunder, and profit
-    displayDebrisInfo(lastRound, results.rounds.length);
+    displayDebrisInfo(lastRound, results.rounds.length, statistics);
 
     document.getElementById('resultSection').style.display = 'block';
     document.getElementById('errorSection').style.display = 'none';
@@ -468,38 +813,77 @@ function switchTab(tabIndex) {
     document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-    // Add active class to selected tab and content
-    document.querySelectorAll('.tab-button')[tabIndex].classList.add('active');
-    document.getElementById(`round-${tabIndex}`).classList.add('active');
+    const tabButtons = document.querySelectorAll('.tab-button');
+
+    // Handle special tabs
+    if (tabIndex === 'setup') {
+        tabButtons[0].classList.add('active');
+        document.getElementById('round-setup').classList.add('active');
+    } else if (tabIndex === 'end') {
+        tabButtons[tabButtons.length - 1].classList.add('active');
+        document.getElementById('round-end').classList.add('active');
+    } else {
+        // +1 because Setup tab is first
+        tabButtons[tabIndex + 1].classList.add('active');
+        document.getElementById(`round-${tabIndex}`).classList.add('active');
+    }
 }
 
 // Display debris information and battle economics
-function displayDebrisInfo(lastRound, totalRounds) {
+function displayDebrisInfo(lastRound, totalRounds, statistics = null) {
     // Determine battle outcome
     const attackerSurvived = Object.keys(lastRound.attacker_ships).length > 0;
     const defenderSurvived = Object.keys(lastRound.defender_ships).length > 0;
 
     let winner = '';
     let outcomeEmoji = '';
-    if (attackerSurvived && !defenderSurvived) {
-        winner = 'Attacker';
-        outcomeEmoji = '🚀';
-    } else if (!attackerSurvived && defenderSurvived) {
-        winner = 'Defender';
-        outcomeEmoji = '🛡️';
-    } else if (!attackerSurvived && !defenderSurvived) {
-        winner = 'Draw';
-        outcomeEmoji = '💥';
+    let winnerColor = '#f59e0b'; // Default yellow for draw
+
+    if (statistics) {
+        // Use statistics for outcome display
+        if (statistics.attackerWinPercent > statistics.defenderWinPercent && statistics.attackerWinPercent > statistics.drawPercent) {
+            winner = `Attacker (${statistics.attackerWinPercent}%)`;
+            outcomeEmoji = '🚀';
+            winnerColor = '#4ade80';
+        } else if (statistics.defenderWinPercent > statistics.attackerWinPercent && statistics.defenderWinPercent > statistics.drawPercent) {
+            winner = `Defender (${statistics.defenderWinPercent}%)`;
+            outcomeEmoji = '🛡️';
+            winnerColor = '#fca5a5';
+        } else if (statistics.attackerWinPercent === 100) {
+            winner = 'Attacker';
+            outcomeEmoji = '🚀';
+            winnerColor = '#4ade80';
+        } else if (statistics.defenderWinPercent === 100) {
+            winner = 'Defender';
+            outcomeEmoji = '🛡️';
+            winnerColor = '#fca5a5';
+        } else {
+            winner = 'Mixed';
+            outcomeEmoji = '📊';
+        }
     } else {
-        winner = 'Draw (max rounds)';
-        outcomeEmoji = '⚔️';
+        // Single run outcome
+        if (attackerSurvived && !defenderSurvived) {
+            winner = 'Attacker';
+            outcomeEmoji = '🚀';
+            winnerColor = '#4ade80';
+        } else if (!attackerSurvived && defenderSurvived) {
+            winner = 'Defender';
+            outcomeEmoji = '🛡️';
+            winnerColor = '#fca5a5';
+        } else if (!attackerSurvived && !defenderSurvived) {
+            winner = 'Draw';
+            outcomeEmoji = '💥';
+        } else {
+            winner = 'Draw (max rounds)';
+            outcomeEmoji = '⚔️';
+        }
     }
 
     // Update outcome section
     document.getElementById('battleWinner').textContent = winner;
-    document.getElementById('battleWinner').style.color = attackerSurvived && !defenderSurvived ? '#4ade80' :
-                                                          !attackerSurvived && defenderSurvived ? '#fca5a5' : '#f59e0b';
-    document.getElementById('battleRounds').textContent = totalRounds;
+    document.getElementById('battleWinner').style.color = winnerColor;
+    document.getElementById('battleRounds').textContent = statistics ? statistics.averageRounds : totalRounds;
     document.getElementById('outcomeTitle').textContent = `${outcomeEmoji} Battle Outcome`;
     document.getElementById('outcomeSection').style.display = 'block';
 
@@ -520,6 +904,14 @@ function displayDebrisInfo(lastRound, totalRounds) {
     };
 
     const recyclersNeeded = calculateRecyclersNeeded(totalDebris.total);
+
+    // Calculate moon chance (1% per 100,000 debris of metal + crystal, max 20%)
+    const debrisForMoon = totalDebris.metal + totalDebris.crystal;
+    const moonChance = Math.min(20, Math.floor(debrisForMoon / 100000));
+
+    // Update moon chance section
+    document.getElementById('moonChance').textContent = moonChance + '%';
+    document.getElementById('moonChanceSection').style.display = 'block';
 
     // Update debris field section
     document.getElementById('debrisMetal').textContent = totalDebris.metal.toLocaleString();
@@ -648,20 +1040,49 @@ function averageSimulationResults(allResults) {
     if (allResults.length === 1) return allResults[0];
 
     const numRuns = allResults.length;
+
+    // Calculate win/loss/draw statistics
+    let attackerWins = 0;
+    let defenderWins = 0;
+    let draws = 0;
+    let totalRoundsSum = 0;
+
+    allResults.forEach(result => {
+        const lastRound = result.rounds[result.rounds.length - 1];
+        const attackerSurvived = Object.keys(lastRound.attacker_ships).length > 0;
+        const defenderSurvived = Object.keys(lastRound.defender_ships).length > 0;
+
+        totalRoundsSum += result.rounds.length;
+
+        if (attackerSurvived && !defenderSurvived) {
+            attackerWins++;
+        } else if (!attackerSurvived && defenderSurvived) {
+            defenderWins++;
+        } else {
+            draws++;
+        }
+    });
+
+    // Find the minimum number of rounds across all simulations
+    // We show rounds up to minRounds, then add a "final" round with averaged end state
+    const minRounds = Math.min(...allResults.map(r => r.rounds.length));
     const maxRounds = Math.max(...allResults.map(r => r.rounds.length));
 
-    // Initialize averaged result structure
+    // Initialize averaged result structure with statistics
     const averaged = {
-        rounds: []
+        rounds: [],
+        statistics: {
+            attackerWinPercent: Math.round((attackerWins / numRuns) * 100),
+            defenderWinPercent: Math.round((defenderWins / numRuns) * 100),
+            drawPercent: Math.round((draws / numRuns) * 100),
+            averageRounds: (totalRoundsSum / numRuns).toFixed(1),
+            numRuns: numRuns
+        }
     };
 
-    // Average each round
-    for (let roundIdx = 0; roundIdx < maxRounds; roundIdx++) {
-        const roundsAtThisIndex = allResults
-            .filter(r => r.rounds[roundIdx])
-            .map(r => r.rounds[roundIdx]);
-
-        if (roundsAtThisIndex.length === 0) continue;
+    // Average each round up to minRounds
+    for (let roundIdx = 0; roundIdx < minRounds; roundIdx++) {
+        const roundsAtThisIndex = allResults.map(r => r.rounds[roundIdx]);
 
         const avgRound = {
             attacker_ships: {},
@@ -678,30 +1099,57 @@ function averageSimulationResults(allResults) {
             hits_defender: 0
         };
 
-        // Average scalar values
-        avgRound.absorbed_damage_attacker = roundsAtThisIndex.reduce((sum, r) => sum + r.absorbed_damage_attacker, 0) / roundsAtThisIndex.length;
-        avgRound.absorbed_damage_defender = roundsAtThisIndex.reduce((sum, r) => sum + r.absorbed_damage_defender, 0) / roundsAtThisIndex.length;
-        avgRound.full_strength_attacker = roundsAtThisIndex.reduce((sum, r) => sum + r.full_strength_attacker, 0) / roundsAtThisIndex.length;
-        avgRound.full_strength_defender = roundsAtThisIndex.reduce((sum, r) => sum + r.full_strength_defender, 0) / roundsAtThisIndex.length;
-        avgRound.hits_attacker = Math.round(roundsAtThisIndex.reduce((sum, r) => sum + r.hits_attacker, 0) / roundsAtThisIndex.length);
-        avgRound.hits_defender = Math.round(roundsAtThisIndex.reduce((sum, r) => sum + r.hits_defender, 0) / roundsAtThisIndex.length);
+        // Average scalar values across all runs
+        avgRound.absorbed_damage_attacker = roundsAtThisIndex.reduce((sum, r) => sum + r.absorbed_damage_attacker, 0) / numRuns;
+        avgRound.absorbed_damage_defender = roundsAtThisIndex.reduce((sum, r) => sum + r.absorbed_damage_defender, 0) / numRuns;
+        avgRound.full_strength_attacker = roundsAtThisIndex.reduce((sum, r) => sum + r.full_strength_attacker, 0) / numRuns;
+        avgRound.full_strength_defender = roundsAtThisIndex.reduce((sum, r) => sum + r.full_strength_defender, 0) / numRuns;
+        avgRound.hits_attacker = Math.round(roundsAtThisIndex.reduce((sum, r) => sum + r.hits_attacker, 0) / numRuns);
+        avgRound.hits_defender = Math.round(roundsAtThisIndex.reduce((sum, r) => sum + r.hits_defender, 0) / numRuns);
 
-        // Average unit counts
-        avgRound.attacker_ships = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_ships));
-        avgRound.defender_ships = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_ships));
-        avgRound.attacker_losses = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_losses));
-        avgRound.defender_losses = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_losses));
-        avgRound.attacker_losses_in_round = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_losses_in_round));
-        avgRound.defender_losses_in_round = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_losses_in_round));
+        // Average unit counts across all runs
+        avgRound.attacker_ships = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_ships), numRuns);
+        avgRound.defender_ships = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_ships), numRuns);
+        avgRound.attacker_losses = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_losses), numRuns);
+        avgRound.defender_losses = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_losses), numRuns);
+        avgRound.attacker_losses_in_round = averageUnitCounts(roundsAtThisIndex.map(r => r.attacker_losses_in_round), numRuns);
+        avgRound.defender_losses_in_round = averageUnitCounts(roundsAtThisIndex.map(r => r.defender_losses_in_round), numRuns);
 
         averaged.rounds.push(avgRound);
+    }
+
+    // Always add a final round showing the averaged end state from all simulations
+    const finalRounds = allResults.map(r => r.rounds[r.rounds.length - 1]);
+
+    const finalAvgRound = {
+        attacker_ships: averageUnitCounts(finalRounds.map(r => r.attacker_ships), numRuns),
+        defender_ships: averageUnitCounts(finalRounds.map(r => r.defender_ships), numRuns),
+        attacker_losses: averageUnitCounts(finalRounds.map(r => r.attacker_losses), numRuns),
+        defender_losses: averageUnitCounts(finalRounds.map(r => r.defender_losses), numRuns),
+        attacker_losses_in_round: {},
+        defender_losses_in_round: {},
+        absorbed_damage_attacker: 0,
+        absorbed_damage_defender: 0,
+        full_strength_attacker: 0,
+        full_strength_defender: 0,
+        hits_attacker: 0,
+        hits_defender: 0,
+        is_final_averaged: true // Mark this as a special averaged final round
+    };
+
+    // Only add as separate round if battles had different lengths
+    if (maxRounds > minRounds) {
+        averaged.rounds.push(finalAvgRound);
+    } else {
+        // Replace the last round with the final averaged one (same data but marked)
+        averaged.rounds[averaged.rounds.length - 1].is_final_averaged = true;
     }
 
     return averaged;
 }
 
 // Average unit counts across multiple results
-function averageUnitCounts(unitCountsList) {
+function averageUnitCounts(unitCountsList, totalRuns) {
     const allUnitIds = new Set();
     unitCountsList.forEach(counts => {
         Object.keys(counts).forEach(id => allUnitIds.add(id));
@@ -710,7 +1158,8 @@ function averageUnitCounts(unitCountsList) {
     const averaged = {};
     for (const unitId of allUnitIds) {
         const amounts = unitCountsList.map(counts => counts[unitId]?.amount || 0);
-        const avgAmount = Math.round(amounts.reduce((sum, a) => sum + a, 0) / amounts.length);
+        // Divide by totalRuns to properly average across all simulations
+        const avgAmount = Math.round(amounts.reduce((sum, a) => sum + a, 0) / totalRuns);
 
         if (avgAmount > 0) {
             averaged[unitId] = {
