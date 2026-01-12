@@ -21,6 +21,76 @@ header {
     margin-bottom: 30px;
 }
 
+/* Update notification banner */
+.update-notification {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    border: 1px solid #34d399;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+    animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.update-icon {
+    font-size: 1.3rem;
+}
+
+.update-text {
+    color: #fff;
+    font-size: 0.95rem;
+}
+
+.update-text strong {
+    color: #a7f3d0;
+}
+
+.update-link {
+    background: #fff;
+    color: #047857;
+    padding: 6px 14px;
+    border-radius: 5px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.update-link:hover {
+    background: #a7f3d0;
+    transform: scale(1.02);
+}
+
+.update-dismiss {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+    margin-left: 4px;
+    transition: color 0.2s ease;
+}
+
+.update-dismiss:hover {
+    color: #fff;
+}
+
 h1 {
     font-size: 2.5rem;
     margin-bottom: 10px;
@@ -58,6 +128,66 @@ h1 {
     margin-bottom: 15px;
     padding-bottom: 10px;
     border-bottom: 2px solid rgba(255, 215, 0, 0.3);
+}
+
+/* API Import Section */
+.api-section {
+    margin-bottom: 15px;
+}
+
+.api-btn {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.api-btn.import-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+}
+
+.api-btn.import-btn:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.api-btn.import-btn:active {
+    transform: translateY(0);
+}
+
+.api-input {
+    width: 100%;
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+    resize: vertical;
+    min-height: 60px;
+    transition: border-color 0.2s ease;
+}
+
+.api-input:focus {
+    outline: none;
+    border-color: rgba(255, 215, 0, 0.5);
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.api-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
 }
 
 /* Character Class Selector */

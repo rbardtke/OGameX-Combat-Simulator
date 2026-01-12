@@ -81,6 +81,11 @@ let wasmReady = false;
 // Store last simulation result for sharing
 let lastBattleResult = null;
 
+// Current extension version (synced with manifest.json)
+const CURRENT_VERSION = '1.4.0';
+const GITHUB_REPO = 'rbardtke/OGameX-Combat-Simulator';
+const GITHUB_RELEASES_API = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
+
 // Load WASM using dynamic import for ES6 module format (--target web)
 async function initWasm() {
     try {
@@ -96,6 +101,78 @@ async function initWasm() {
     } catch (error) {
         console.error('Failed to load WASM module:', error);
         showError('Failed to initialize combat simulator. Error: ' + error.message);
+    }
+}
+
+// Compare semantic versions (returns: -1 if a < b, 0 if a == b, 1 if a > b)
+function compareVersions(a, b) {
+    const partsA = a.replace(/^v/, '').split('.').map(Number);
+    const partsB = b.replace(/^v/, '').split('.').map(Number);
+
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+        const numA = partsA[i] || 0;
+        const numB = partsB[i] || 0;
+        if (numA < numB) return -1;
+        if (numA > numB) return 1;
+    }
+    return 0;
+}
+
+// Check for updates from GitHub releases
+async function checkForUpdates() {
+    try {
+        const response = await fetch(GITHUB_RELEASES_API);
+        if (!response.ok) {
+            console.log('Could not check for updates (offline or rate limited)');
+            return;
+        }
+
+        const release = await response.json();
+        const latestVersion = release.tag_name || release.name;
+
+        if (!latestVersion) {
+            console.log('No version found in latest release');
+            return;
+        }
+
+        const comparison = compareVersions(CURRENT_VERSION, latestVersion);
+
+        if (comparison < 0) {
+            // New version available
+            showUpdateNotification(latestVersion, release.html_url);
+        } else {
+            console.log(`Version ${CURRENT_VERSION} is up to date`);
+        }
+    } catch (error) {
+        // Silently fail - user might be offline
+        console.log('Update check failed:', error.message);
+    }
+}
+
+// Show update notification banner
+function showUpdateNotification(newVersion, releaseUrl) {
+    // Check if notification already exists
+    if (document.getElementById('updateNotification')) return;
+
+    const notification = document.createElement('div');
+    notification.id = 'updateNotification';
+    notification.className = 'update-notification';
+    notification.innerHTML = `
+        <span class="update-icon">🆕</span>
+        <span class="update-text">
+            Version <strong>${newVersion}</strong> is available!
+            You're using v${CURRENT_VERSION}.
+        </span>
+        <a href="${releaseUrl}" target="_blank" rel="noopener" class="update-link">Download Update</a>
+        <button class="update-dismiss" onclick="this.parentElement.remove()">✕</button>
+    `;
+
+    // Insert at the top of the page
+    const header = document.querySelector('header');
+    if (header) {
+        header.insertAdjacentElement('afterend', notification);
+    } else {
+        document.body.insertBefore(notification, document.body.firstChild);
     }
 }
 
@@ -1592,6 +1669,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize WASM on page load
     initWasm();
 
+    // Check for updates from GitHub releases
+    checkForUpdates();
+
     // Calculate flight time on initial load with default coordinates
     updateFlightTime();
 
@@ -1620,7 +1700,359 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Check URL for share code on load
     checkUrlForShareCode();
+
+    // API Import event listeners
+    document.getElementById('atkImportBtn').addEventListener('click', () => importAPIKey('attacker'));
+    document.getElementById('defImportBtn').addEventListener('click', () => importAPIKey('defender'));
 });
+
+// ============================================
+// API Import/Export Functions
+// ============================================
+
+// Export current fleet composition to OGameX API format
+function exportAPIKey(side) {
+    const prefix = side === 'attacker' ? 'atk' : 'def';
+
+    // Collect character class
+    const characterClassId = getCharacterClass(side);
+
+    // Collect coordinates
+    let coords = "1:1:1";
+    if (side === 'attacker') {
+        const galaxyInput = document.getElementById('originGalaxy');
+        const systemInput = document.getElementById('originSystem');
+        const planetInput = document.getElementById('originPlanet');
+
+        if (galaxyInput && systemInput && planetInput) {
+            const galaxy = parseInt(galaxyInput.value) || 1;
+            const system = parseInt(systemInput.value) || 1;
+            const planet = parseInt(planetInput.value) || 1;
+            coords = `${galaxy}:${system}:${planet}`;
+        }
+    } else if (side === 'defender') {
+        const galaxyInput = document.getElementById('targetGalaxy');
+        const systemInput = document.getElementById('targetSystem');
+        const planetInput = document.getElementById('targetPlanet');
+
+        if (galaxyInput && systemInput && planetInput) {
+            const galaxy = parseInt(galaxyInput.value) || 1;
+            const system = parseInt(systemInput.value) || 1;
+            const planet = parseInt(planetInput.value) || 1;
+            coords = `${galaxy}:${system}:${planet}`;
+        }
+    }
+
+    // Collect research levels
+    const weaponsTech = parseInt(document.getElementById(`${prefix}Weapons`).value) || 0;
+    const shieldingTech = parseInt(document.getElementById(`${prefix}Shielding`).value) || 0;
+    const armourTech = parseInt(document.getElementById(`${prefix}Armour`).value) || 0;
+    const combustionTech = parseInt(document.getElementById(`${prefix}Combustion`)?.value) || 0;
+    const impulseTech = parseInt(document.getElementById(`${prefix}Impulse`)?.value) || 0;
+    const hyperspaceTech = parseInt(document.getElementById(`${prefix}Hyperspace`)?.value) || 0;
+    const hyperspaceResearchTech = parseInt(document.getElementById(`${prefix}HyperspaceTech`)?.value) || 0;
+
+    // Create API data structure matching OGameX format
+    const apiData = {
+        coords: coords,
+        characterClassId: characterClassId,
+        allianceClassId: 0,
+        researches: {
+            "109": weaponsTech,     // Weapons
+            "110": shieldingTech,   // Shielding
+            "111": armourTech,      // Armour
+            "115": combustionTech,  // Combustion Drive
+            "117": impulseTech,     // Impulse Drive
+            "118": hyperspaceTech,  // Hyperspace Drive
+            "114": hyperspaceResearchTech  // Hyperspace Technology
+        },
+        defenses: {},
+        ships: {},
+        missiles: {
+            "502": { amount: 0 },
+            "503": { amount: 0 }
+        },
+        bonuses: {
+            recycleAttackerFleet: 0,
+            moonChanceIncrease: 0,
+            lifeformProtection: 0,
+            spaceDockExtender: 0,
+            denCapacity: { metal: 0, crystal: 0, deuterium: 0 },
+            characterClassBooster: { "1": 0, "2": 0, "3": 0 }
+        },
+        fleetspeed: 100
+    };
+
+    // Collect ships
+    const shipIds = [202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 213, 214, 215, 218, 219];
+    shipIds.forEach(id => {
+        const amount = parseInt(document.getElementById(`${prefix}-${id}`)?.value) || 0;
+        apiData.ships[id] = {
+            amount: amount,
+            weapon: 0,
+            shield: 0,
+            armor: 0,
+            cargo: 0,
+            speed: 0,
+            fuel: 0
+        };
+    });
+
+    // Collect defenses (only for defender)
+    if (side === 'defender') {
+        const defenseIds = [401, 402, 403, 404, 405, 406, 407, 408];
+        defenseIds.forEach(id => {
+            const amount = parseInt(document.getElementById(`${prefix}-${id}`)?.value) || 0;
+            apiData.defenses[id] = {
+                amount: amount,
+                weapon: 0,
+                shield: 0,
+                armor: 0
+            };
+        });
+    }
+
+    // Create API 1 format (pipe-separated legacy format)
+    const apiCommonData = [
+        ['coords', coords],
+        ['characterClassId', characterClassId]
+    ];
+
+    const apiTechData = [
+        [109, weaponsTech],      // Weapons
+        [115, combustionTech],   // Combustion
+        [110, shieldingTech],    // Shielding
+        [117, impulseTech],      // Impulse
+        [111, armourTech],       // Armour
+        [118, hyperspaceTech],   // Hyperspace Drive
+        [114, hyperspaceResearchTech]  // Hyperspace Tech
+    ];
+
+    const apiShipData = shipIds.map(id => {
+        const amount = parseInt(document.getElementById(`${prefix}-${id}`)?.value) || 0;
+        return [id, amount];
+    });
+
+    const apiDefenseData = side === 'defender' ?
+        [401, 402, 403, 404, 405, 406, 407, 408].map(id => {
+            const amount = parseInt(document.getElementById(`${prefix}-${id}`)?.value) || 0;
+            return [id, amount];
+        }) : [];
+
+    const apiDataOld = []
+        .concat(apiCommonData)
+        .concat(apiTechData)
+        .concat(apiShipData)
+        .concat(apiDefenseData)
+        .map(item => item.join(';'))
+        .join('|');
+
+    // Convert API 2 to JSON string
+    const jsonString = JSON.stringify(apiData);
+
+    // Create combined output with both formats
+    const combinedOutput = `API 1:\n${apiDataOld}\n\nAPI 2:\n${jsonString}`;
+
+    // Display in textarea
+    const textarea = document.getElementById(side === 'attacker' ? 'atkApiInput' : 'defApiInput');
+    textarea.value = combinedOutput;
+
+    // Select the text
+    textarea.select();
+
+    // Copy to clipboard (copy the combined output)
+    navigator.clipboard.writeText(combinedOutput).then(() => {
+        // Show success message
+        const btn = document.getElementById(side === 'attacker' ? 'atkExportBtn' : 'defExportBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✅ Copied!';
+        btn.style.background = 'linear-gradient(135deg, #10b981 0%, #047857 100%)';
+
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = '';
+        }, 2000);
+    }).catch(err => {
+        alert('Failed to copy to clipboard. Please try again.');
+        console.error('Failed to copy:', err);
+    });
+}
+
+// Parse API 1 format (pipe-separated)
+function parseAPI1(apiString) {
+    const parts = apiString.split('|');
+    const data = {
+        coords: "1:1:1",
+        characterClassId: 0,
+        researches: {},
+        ships: {},
+        defenses: {}
+    };
+
+    parts.forEach(part => {
+        const [key, value] = part.split(';');
+        const numKey = parseInt(key);
+        const numValue = parseInt(value);
+
+        // Common data
+        if (key === 'coords') {
+            data.coords = value;
+        }
+        else if (key === 'characterClassId') {
+            data.characterClassId = numValue;
+        }
+        // Research techs (109-118)
+        else if (numKey >= 109 && numKey <= 118) {
+            data.researches[numKey] = numValue;
+        }
+        // Ships (202-219)
+        else if ((numKey >= 202 && numKey <= 215) || numKey === 218 || numKey === 219) {
+            data.ships[numKey] = { amount: numValue };
+        }
+        // Defenses (401-408)
+        else if (numKey >= 401 && numKey <= 408) {
+            data.defenses[numKey] = { amount: numValue };
+        }
+    });
+
+    return data;
+}
+
+// Import fleet composition from OGameX API format
+function importAPIKey(side) {
+    const prefix = side === 'attacker' ? 'atk' : 'def';
+
+    // Get API key from textarea
+    const textarea = document.getElementById(side === 'attacker' ? 'atkApiInput' : 'defApiInput');
+    let apiKey = textarea.value.trim();
+
+    if (!apiKey) {
+        alert('Please paste an API key in the text field first.');
+        return;
+    }
+
+    try {
+        let apiData;
+
+        // Check if it's the combined format with "API 1:" and "API 2:" labels
+        if (apiKey.includes('API 1:') && apiKey.includes('API 2:')) {
+            // Extract API 2 (JSON) part
+            const api2Match = apiKey.match(/API 2:\s*(\{[\s\S]*\})/);
+            if (api2Match) {
+                apiData = JSON.parse(api2Match[1]);
+            } else {
+                throw new Error('Could not find API 2 data');
+            }
+        }
+        // Check if it's API 1 format (contains pipes and semicolons, no curly braces)
+        else if (apiKey.includes('|') && apiKey.includes(';') && !apiKey.includes('{')) {
+            apiData = parseAPI1(apiKey);
+        }
+        // Otherwise assume it's API 2 JSON format
+        else {
+            apiData = JSON.parse(apiKey);
+        }
+
+        // Import coordinates
+        if (apiData.coords) {
+            const coordsParts = apiData.coords.split(':');
+            if (coordsParts.length === 3) {
+                const galaxy = parseInt(coordsParts[0]) || 1;
+                const system = parseInt(coordsParts[1]) || 1;
+                const planet = parseInt(coordsParts[2]) || 1;
+
+                if (side === 'attacker') {
+                    const galaxyInput = document.getElementById('originGalaxy');
+                    const systemInput = document.getElementById('originSystem');
+                    const planetInput = document.getElementById('originPlanet');
+
+                    if (galaxyInput) galaxyInput.value = galaxy;
+                    if (systemInput) systemInput.value = system;
+                    if (planetInput) planetInput.value = planet;
+                } else if (side === 'defender') {
+                    const galaxyInput = document.getElementById('targetGalaxy');
+                    const systemInput = document.getElementById('targetSystem');
+                    const planetInput = document.getElementById('targetPlanet');
+
+                    if (galaxyInput) galaxyInput.value = galaxy;
+                    if (systemInput) systemInput.value = system;
+                    if (planetInput) planetInput.value = planet;
+                }
+            }
+        }
+
+        // Import character class
+        if (apiData.characterClassId !== undefined) {
+            const radioName = side === 'attacker' ? 'atkClass' : 'defClass';
+            const radio = document.querySelector(`input[name="${radioName}"][value="${apiData.characterClassId}"]`);
+            if (radio) radio.checked = true;
+        }
+
+        // Import research levels
+        if (apiData.researches) {
+            if (apiData.researches["109"] !== undefined) {
+                document.getElementById(`${prefix}Weapons`).value = apiData.researches["109"];
+            }
+            if (apiData.researches["110"] !== undefined) {
+                document.getElementById(`${prefix}Shielding`).value = apiData.researches["110"];
+            }
+            if (apiData.researches["111"] !== undefined) {
+                document.getElementById(`${prefix}Armour`).value = apiData.researches["111"];
+            }
+            if (apiData.researches["115"] !== undefined && document.getElementById(`${prefix}Combustion`)) {
+                document.getElementById(`${prefix}Combustion`).value = apiData.researches["115"];
+            }
+            if (apiData.researches["117"] !== undefined && document.getElementById(`${prefix}Impulse`)) {
+                document.getElementById(`${prefix}Impulse`).value = apiData.researches["117"];
+            }
+            if (apiData.researches["118"] !== undefined && document.getElementById(`${prefix}Hyperspace`)) {
+                document.getElementById(`${prefix}Hyperspace`).value = apiData.researches["118"];
+            }
+            if (apiData.researches["114"] !== undefined && document.getElementById(`${prefix}HyperspaceTech`)) {
+                document.getElementById(`${prefix}HyperspaceTech`).value = apiData.researches["114"];
+            }
+        }
+
+        // Import ships
+        if (apiData.ships) {
+            Object.keys(apiData.ships).forEach(shipId => {
+                const input = document.getElementById(`${prefix}-${shipId}`);
+                if (input && apiData.ships[shipId].amount !== undefined) {
+                    input.value = apiData.ships[shipId].amount;
+                }
+            });
+        }
+
+        // Import defenses (only for defender)
+        if (side === 'defender' && apiData.defenses) {
+            Object.keys(apiData.defenses).forEach(defenseId => {
+                const input = document.getElementById(`${prefix}-${defenseId}`);
+                if (input && apiData.defenses[defenseId].amount !== undefined) {
+                    input.value = apiData.defenses[defenseId].amount;
+                }
+            });
+        }
+
+        // Update flight time calculation if coordinates or ships changed
+        if (typeof updateFlightTime === 'function') {
+            updateFlightTime();
+        }
+
+        // Show success message
+        const btn = document.getElementById(side === 'attacker' ? 'atkImportBtn' : 'defImportBtn');
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '✅ Imported!';
+        btn.style.background = 'linear-gradient(135deg, #10b981 0%, #047857 100%)';
+
+        setTimeout(() => {
+            btn.innerHTML = originalText;
+            btn.style.background = '';
+        }, 2000);
+    } catch (error) {
+        alert('Invalid API key format. Please make sure you copied the complete JSON data.');
+        console.error('Failed to parse API key:', error);
+    }
+}
 
 // ============================================
 // IPM Simulation Functions
